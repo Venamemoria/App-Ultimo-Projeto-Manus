@@ -8,7 +8,7 @@ Com confirmação de e-mail habilitada, `signUp` devolve usuário, mas a sessão
 
 Para desenvolvimento em outra origem, adicionar os caminhos exatos `/entrar` e `/recuperar` à allowlist, preservando os existentes. A origem publicada definitiva deve ser adicionada depois da publicação, e o Site URL deve ser revisado então; não adivinhar domínio de produção.[1]
 
-Os e-mails usam a configuração real do projeto Supabase. A ativação pública em produção precisa também revisar SMTP, limites de envio, proteção contra abuso e templates. Não considerar e-mail enviado nem login confirmado se o provedor retornar erro. O primeiro cadastro/login real do app ainda depende da ação do proprietário; não foi realizado um teste criando conta fictícia.
+Os e-mails usam a configuração real do projeto Supabase. A ativação pública em produção precisa também revisar SMTP, limites de envio, proteção contra abuso e templates. Não considerar e-mail enviado nem login confirmado se o provedor retornar erro. O proprietário realizou pessoalmente o primeiro cadastro/login em 29/10/2026 e o vínculo à organização Vê na Memória foi confirmado; não foi realizado um teste criando conta fictícia.
 
 ## Referências
 

@@ -1,27 +1,18 @@
-const numberFormatter = new Intl.NumberFormat('pt-BR', {
-  maximumFractionDigits: 2,
-});
-
-const currencyFormatter = new Intl.NumberFormat('pt-BR', {
-  style: 'currency',
-  currency: 'BRL',
-  maximumFractionDigits: 2,
-});
+import { formatDecimal } from './decimal';
 
 export function formatNumber(value: string | number | null | undefined): string {
-  if (value === null || value === undefined || value === '') return '—';
-  const parsed = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(parsed) ? numberFormatter.format(parsed) : '—';
+  return formatDecimal(value, 2);
 }
 
 export function formatCurrency(value: string | number | null | undefined): string {
-  if (value === null || value === undefined || value === '') return '—';
-  const parsed = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(parsed) ? currencyFormatter.format(parsed) : '—';
+  const text = formatDecimal(value, 2, true);
+  return text === '—' ? text : `R$ ${text}`;
 }
 
 export function formatDate(value: string | null | undefined): string {
   if (!value) return '—';
+  const isoDate = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (isoDate) return `${isoDate[3]}/${isoDate[2]}/${isoDate[1]}`;
   const date = new Date(value);
   return Number.isNaN(date.getTime())
     ? '—'

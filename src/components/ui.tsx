@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
+import { cloneElement, isValidElement, useEffect, useId, useRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactElement, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
 import { AlertCircle, CheckCircle2, Info, LoaderCircle, X } from 'lucide-react';
 
 const join = (...classes: Array<string | undefined | false>) => classes.filter(Boolean).join(' ');
@@ -41,28 +41,37 @@ export function Field({
   error?: string;
   children: ReactNode;
 }) {
+  const generatedId = useId();
   const hintId = useId();
   const errorId = useId();
+  const element = isValidElement(children) ? children as ReactElement<Record<string, unknown>> : null;
+  const inputId = typeof element?.props.id === 'string' ? element.props.id : generatedId;
+  const describedBy = [element?.props['aria-describedby'], error ? errorId : hint ? hintId : null].filter(Boolean).join(' ');
+  const control = element ? cloneElement(element, {
+    id: inputId,
+    'aria-describedby': describedBy || undefined,
+    'aria-invalid': error ? true : element.props['aria-invalid'],
+  }) : children;
   return (
     <div className="field">
-      <label className="field-label">{label}</label>
-      {children}
+      <label className="field-label" htmlFor={inputId}>{label}</label>
+      {control}
       {hint && !error ? <p id={hintId} className="field-hint">{hint}</p> : null}
       {error ? <p id={errorId} className="field-error" role="alert">{error}</p> : null}
     </div>
   );
 }
 
-export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
-  return <input className={join('input', props.className)} {...props} />;
+export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
+  return <input className={join('input', className)} {...props} />;
 }
 
-export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select className={join('input', 'select', props.className)} {...props} />;
+export function Select({ className, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
+  return <select className={join('input', 'select', className)} {...props} />;
 }
 
-export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea className={join('input', 'textarea', props.className)} {...props} />;
+export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return <textarea className={join('input', 'textarea', className)} {...props} />;
 }
 
 export function EmptyState({
@@ -138,6 +147,7 @@ export function Modal({
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
+  const titleId = useId();
 
   useEffect(() => {
     if (!open) return;
@@ -179,9 +189,9 @@ export function Modal({
   if (!open) return null;
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <div className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" ref={dialogRef}>
+      <div className="modal" role="dialog" aria-modal="true" aria-labelledby={titleId} ref={dialogRef}>
         <div className="modal-header">
-          <h2 id="modal-title">{title}</h2>
+          <h2 id={titleId}>{title}</h2>
           <button className="icon-button" type="button" aria-label="Fechar" onClick={onClose}><X size={19} /></button>
         </div>
         <div className="modal-content">{children}</div>

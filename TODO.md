@@ -1,6 +1,6 @@
 # Vê na Memória — entregas e critérios
 
-Plano aprovado pelo usuário em 29/10/2026. A fundação inicial foi aplicada e verificada no Supabase em 29/10/2026 às 17:58 BRT. As demais entregas permanecem abertas; ainda não há aplicação publicada. O schema evoluirá por migrations nas próximas fatias verticais.
+Plano aprovado pelo usuário em 29/10/2026. Fundação Supabase e autenticação/organização reais estão concluídas. A execução continua no inventário/compras/custo unitário e nas próximas fatias; ainda não há aplicação publicada. O schema evolui por migrations, preservando dados.
 
 ## [x] Fundação Supabase e segurança antes da UI
 

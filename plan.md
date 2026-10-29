@@ -12,11 +12,11 @@ A prévia local usará Vite em `0.0.0.0:3000`, porta já configurada no projeto.
 
 ## Identidade visual e referências
 
-As referências têm identidades visuais diferentes. Proposta para aprovação: usar a organização de módulos e navegação agrupada da Papelaria On, com a apresentação clara e os tons quentes do AtelierFlow, sob a marca Vê na Memória. Esse é um design unificado, não uma afirmação de que duas interfaces distintas podem ser copiadas pixel a pixel simultaneamente. Caso a preferência seja fidelidade visual a uma única referência, ela deve ser escolhida antes da interface.
+As referências têm identidades visuais diferentes. Design unificado aprovado: usar a organização de módulos e navegação agrupada da Papelaria On, com a apresentação clara e os tons quentes do AtelierFlow, sob a marca Vê na Memória. Não é uma afirmação de que duas interfaces distintas podem ser copiadas pixel a pixel simultaneamente.
 
 O layout será de ferramenta de gestão: barra lateral persistente no desktop, cabeçalho de contexto, área de trabalho ampla, cartões de indicadores, tabelas com filtros, formulários em etapas e ações primárias consistentes. No celular, a barra lateral vira painel recolhível; formulários e ações continuam acessíveis sem depender de hover. Não usar imagens decorativas nem dados fictícios para preencher os painéis.
 
-Proposta de design: fundo creme, superfícies claras, acentos terracota e estados com cor mais texto; tipografia serifada nos títulos e sans-serif nos dados e controles. Identidade da marca em um wordmark próprio com um sinal de papel dobrado. Animações curtas para abrir painéis e confirmar alterações, respeitando movimento reduzido. Microcopy direta: “Cadastrar insumo” e “Estoque insuficiente para iniciar a produção”. Essas decisões ficam sujeitas à aprovação visual.
+Design aprovado: fundo creme, superfícies claras, acentos terracota e estados com cor mais texto; tipografia serifada nos títulos e sans-serif nos dados e controles. Identidade da marca em um wordmark próprio com um sinal de papel dobrado. Animações curtas para abrir painéis e confirmar alterações, respeitando movimento reduzido. Microcopy direta: “Cadastrar insumo” e “Estoque insuficiente para iniciar a produção”.
 
 A paridade de funcionalidades continua como requisito. As telas já inspecionadas estão registradas em `referencias.md`; fluxos ainda não abertos serão inspecionados antes de sua implementação. Nenhum módulo será declarado equivalente apenas porque o menu aparece. Funcionalidades exclusivas da operação comercial das empresas de referência, integrações proprietárias e recursos bloqueados por assinatura exigem definição específica, não serão apresentados como integrações já disponíveis neste ERP.
 
@@ -92,14 +92,14 @@ Depois da aprovação, registrar `TODO.md` com os critérios completos e configu
 
 O repositório informado é público. Código, migrations e documentação podem ser enviados; segredos, dados de clientes, HTML privado das referências e arquivos `.env` não serão publicados. Não fazer force-push nem substituir o commit inicial.
 
-A conexão canônica do Manus aceita um repositório GitHub novo, não a adoção deste repositório existente. Proposta que depende de aprovação: preservar o repositório já informado e enviar a ele uma cópia de código versionada com commit/push ao concluir cada funcionalidade central; manter separadamente os checkpoints da prévia no repositório gerenciado Manus. Não criar outro repositório GitHub nem trocar `origin` do projeto para contornar a limitação. Esta proposta atende ao destino pedido com duas histórias de salvamento; a cópia e cada push serão verificados e não incluirão arquivos privados.
+A conexão canônica do Manus aceita um repositório GitHub novo, não a adoção deste repositório existente. Arranjo aprovado: preservar o repositório já informado e enviar a ele uma cópia de código versionada com commit/push ao concluir cada funcionalidade central; manter separadamente os checkpoints da prévia no repositório gerenciado Manus. Não criar outro repositório GitHub nem trocar `origin` do projeto para contornar a limitação. A cópia e cada push são verificados e não incluem arquivos privados.
 
 Instalar dependências com gerenciador fixado e permissões de scripts revisadas. Executar verificação de tipos, build e verificações pertinentes à funcionalidade. Usar um agente somente leitura para conferir as conexões da implementação complexa. Não realizar testes que gravem ou apaguem registros em produção sem uma decisão explícita sobre ambiente de teste. Publicação só será declarada quando confirmada; nenhuma publicação automática está habilitada.
 
-## Dependências que ainda faltam
+## Configuração e dependências externas
 
-Precisamos de um projeto Supabase autorizado, preferencialmente dedicado ao app. Solicitar URL/chave pública, conexão administrativa necessária às migrations e credencial server-side somente por formulário seguro. Se o projeto já contém dados, inspecionar o schema e ajustar migrations para preservá-los antes de aplicar mudanças.
+O projeto Supabase autorizado foi configurado por formulário protegido e inspecionado antes da fundação. A conexão do Session pooler foi verificada no painel; não houve reset ou redefinição de senha. O proprietário realizou pessoalmente cadastro e login no aplicativo, e sua organização real foi vinculada. Migrations seguintes continuam preservando dados existentes.
 
 As contas e chaves de WhatsApp e outros provedores serão solicitadas quando a fatia correspondente precisar ser ativada, não como segredos obrigatórios fictícios. Nenhuma senha das referências será copiada ao projeto.
 
-Confirmar: aprovação deste plano; preferência visual unificada ou referência visual principal; uso do repositório existente com cópia versionada por etapa e checkpoints Manus separados; existência do projeto Supabase. Até essas dependências serem resolvidas, planejamento e inspeção não serão apresentados como software funcionando.
+Plano, identidade unificada, cópia versionada ao GitHub existente e Supabase já foram aprovados/resolvidos. A aplicação progride por fatias com evidências no TODO e docs; não alegar paridade, integração ativada ou publicação sem sua verificação específica.

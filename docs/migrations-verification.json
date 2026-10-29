@@ -1,0 +1,56 @@
+{
+  "migrations": [
+    {
+      "version": "20261029221500_inventory",
+      "status": "applied",
+      "source_sha256": "5b7a6631f41c84b57107080da939170b33ef3eebae4c44b9ba61d063beebf7f7"
+    }
+  ],
+  "verification": "passed",
+  "tables_rls": [
+    [
+      "vm_cash_entries",
+      true
+    ],
+    [
+      "vm_clients",
+      true
+    ],
+    [
+      "vm_material_purchases",
+      true
+    ],
+    [
+      "vm_materials",
+      true
+    ],
+    [
+      "vm_memberships",
+      true
+    ],
+    [
+      "vm_organizations",
+      true
+    ],
+    [
+      "vm_product_components",
+      true
+    ],
+    [
+      "vm_products",
+      true
+    ],
+    [
+      "vm_schema_migrations",
+      true
+    ],
+    [
+      "vm_stock_movements",
+      true
+    ],
+    [
+      "vm_suppliers",
+      true
+    ]
+  ]
+}
