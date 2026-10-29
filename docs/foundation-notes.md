@@ -1,17 +1,21 @@
-# Fundação técnica
+# Fundação técnica — status atual
 
-O projeto Supabase selecionado pelo usuário é Ve no atelie. Uma consulta somente leitura realizada pelo SQL Editor autenticado em 29/10/2026 confirmou: nenhuma tabela nos schemas public/vm_private, zero usuários em auth.users e publicação supabase_realtime existente. A criação da fundação será feita por migration transacional versionada, não por reset do banco. Não serão criados usuários, organizações ou pedidos de demonstração.
+A migration `20261029203500_foundation` foi aplicada ao projeto Supabase Ve no atelie em 29/10/2026 às 17:58 BRT. A execução foi transacional e a verificação efetiva passou: nove tabelas com RLS, 14 políticas, cinco RPCs com execução permitida a authenticated e negada a anon. Leitura anônima de insumos, update direto do saldo e insert/update/delete direto em movimentos de estoque estão bloqueados. O relatório de metadados está em `foundation-verification.json`.
 
-A URI PostgreSQL recebida não passou na validação de formato. A sessão autenticada no painel permite aplicar e verificar o SQL sem alterar senha ou configurações de conexão. Essa aplicação será registrada apenas depois de seu resultado real. Para migrations futuras via CLI, a URI precisa ser configurada corretamente.
+Nenhum usuário, organização, insumo, produto ou pedido de demonstração foi criado. Antes da aplicação, consulta somente leitura confirmou o schema de aplicação vazio, zero usuários em auth.users e publicação supabase_realtime existente. Nenhum reset, exclusão de dados ou redefinição de senha foi necessário.
 
-RLS combina grants e políticas por operação. Helpers de membership ficam em schema privado para evitar recursão e exposição desnecessária; funções com privilégios elevados usam search_path fixo e nomes qualificados. Chaves privadas nunca são incluídas no navegador.[1]
+A migration passou também em parser PostgreSQL: 92 comandos SQL e sete funções PL/pgSQL. A verificação sintática não foi usada como substituta da execução: a aplicação e a inspeção das permissões ocorreram no Supabase real.
+
+## Conexão
+
+Os parâmetros corretos de Session pooler foram copiados do diálogo Connect do próprio projeto: cluster aws-1 da região sa-east-1, porta 5432. A normalização limitada em memória remove delimitadores de exemplo das entradas protegidas; os valores armazenados não foram copiados para arquivos ou Git. A conexão usa SSL e a senha já fornecida. Parâmetros públicos de projeto estão em `supabase/project.json`.
+
+A URI direta inicialmente recebida exigia IPv6, não alcançável pela rede do ambiente; o host aws-0 informado posteriormente não correspondia ao projeto. O navegador retornou após indisponibilidade temporária e permitiu verificar o host exato, sem inferi-lo pela região. Para aplicar a migration, não foi necessário executar SQL pelo navegador nem modificar a infraestrutura.
+
+## Segurança
+
+RLS combina grants e políticas por operação. Helpers de membership ficam em schema privado para evitar recursão e exposição desnecessária. Funções com privilégios elevados fixam search_path e usam nomes qualificados; autenticação, papel e organização são validados no banco. Chaves privadas nunca são incluídas no navegador.[1]
 
 ## Referências
 
 [1]: https://supabase.com/docs/guides/database/postgres/row-level-security "Supabase — Row Level Security"
-
-## Verificação sintática e acesso
-
-A migration inicial contém nove tabelas com RLS e passou no parser PostgreSQL: 92 comandos SQL e sete funções PL/pgSQL analisados sem erro sintático. A verificação não substitui execução nem testes de políticas no Supabase. Nenhuma migration foi aplicada até este registro.
-
-A normalização limitada em memória recuperou a URL de API e a estrutura da URI recebidas, sem modificar segredos armazenados. A API respondeu HTTP 200; a conexão PostgreSQL direta falhou por indisponibilidade de rede IPv6. É necessário o host e o usuário exatos do Session pooler exibidos no painel, ou a retomada da sessão de editor SQL. Não inferir host a partir da região.

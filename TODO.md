@@ -1,10 +1,12 @@
 # Vê na Memória — entregas e critérios
 
-Plano aprovado pelo usuário em 29/10/2026. Critérios abaixo permanecem abertos até haver implementação e evidência de funcionamento. O projeto foi inicializado; não há aplicação, banco aplicado, funcionalidade central concluída ou publicação neste momento.
+Plano aprovado pelo usuário em 29/10/2026. A fundação inicial foi aplicada e verificada no Supabase em 29/10/2026 às 17:58 BRT. As demais entregas permanecem abertas; ainda não há aplicação publicada. O schema evoluirá por migrations nas próximas fatias verticais.
 
-## [ ] Fundação Supabase e segurança antes da UI
+## [x] Fundação Supabase e segurança antes da UI
 
 Usar estritamente Vite, React, TypeScript, TailwindCSS e Supabase; manter o projeto migrável via Git para Lovable.dev. Não usar TanStack Start, Nitro, MySQL/Drizzle ou autenticação Manus no lugar de Supabase. Configurar o schema Supabase e políticas RLS PRIMEIRO. Migrations versionadas devem preservar dados existentes; não resetar o banco. Todas as tabelas operacionais devem separar organizações e negar acesso não autorizado. Relacionamentos impedem mistura entre organizações. RPCs validam identidade/papel, fixam search_path quando elevam privilégios e não deixam o cliente escrever diretamente em saldo, movimentos ou status protegidos. Segredos de banco/serviços ficam fora do frontend, logs e Git. Configuração depende de um projeto Supabase real indicado pelo usuário.
+
+Evidência: `docs/foundation-verification.json` registra nove tabelas com RLS, 14 políticas, cinco RPCs sem execução anônima e bloqueio de leitura anônima de insumos e de alterações diretas em saldo/histórico. Migration transacional aplicada sem seed, reset ou redefinição de senha.
 
 ## [ ] Autenticação, organização e permissões reais
 

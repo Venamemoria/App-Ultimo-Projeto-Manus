@@ -1,3 +1,3 @@
 export default {
-  logoUrl: "https://github.com/Venamemoria.png?size=96",
+  logoUrl: "https://files.manuscdn.com/user_upload_by_module/session_file/310519664043058682/dUDvstWchMVeRBnV.webp",
 };

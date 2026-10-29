@@ -1,6 +1,6 @@
 # Vê na Memória — contrato inicial PostgreSQL/Supabase
 
-A migration `supabase/migrations/20261029203500_foundation.sql` cria somente a fundação do ERP. Ela não foi aplicada por este trabalho e não cria organizações, usuários, tenants ou dados fictícios. A aplicação deve usar um projeto Supabase autorizado e uma sessão real do Supabase Auth.
+A migration `supabase/migrations/20261029203500_foundation.sql` cria a fundação inicial do ERP e foi aplicada no Supabase autorizado em 29/10/2026. A verificação de RLS e grants está em `foundation-verification.json`. Ela não cria organizações, usuários, tenants ou dados fictícios. A aplicação usa uma sessão real do Supabase Auth.
 
 ## Escopo e regras comuns
 

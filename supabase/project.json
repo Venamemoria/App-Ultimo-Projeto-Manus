@@ -1,0 +1,6 @@
+{
+  "projectRef": "kasupbixvesyyrvmfzgm",
+  "poolerHost": "aws-1-sa-east-1.pooler.supabase.com",
+  "poolerPort": 5432,
+  "database": "postgres"
+}

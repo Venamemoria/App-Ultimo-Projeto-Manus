@@ -1,6 +1,6 @@
 # Vê na Memória — plano de implementação
 
-Este plano está aguardando aprovação. O projeto foi inicializado, mas ainda não há aplicação, schema aplicado, funcionalidade concluída nem publicação. O repositório `Venamemoria/App-No-Atelie` está acessível e contém apenas seu commit inicial e README. As referências foram acessadas com login autorizado, somente para leitura e inspeção.
+Plano aprovado pelo usuário em 29/10/2026, incluindo a identidade unificada e a cópia versionada ao repositório existente. A fundação Supabase foi aplicada e verificada às 17:58 BRT; a execução progride por fatias verticais com evidências em `TODO.md` e `docs/`. O repositório `Venamemoria/App-No-Atelie` já recebeu a preparação da fundação. As referências foram acessadas com login autorizado, somente para leitura e inspeção. A publicação não está habilitada automaticamente.
 
 ## Stack e infraestrutura
 

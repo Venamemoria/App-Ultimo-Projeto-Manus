@@ -1,0 +1,73 @@
+{
+  "migration": "20261029203500_foundation",
+  "verification": "passed",
+  "tables_rls": [
+    [
+      "vm_clients",
+      true
+    ],
+    [
+      "vm_materials",
+      true
+    ],
+    [
+      "vm_memberships",
+      true
+    ],
+    [
+      "vm_organizations",
+      true
+    ],
+    [
+      "vm_product_components",
+      true
+    ],
+    [
+      "vm_products",
+      true
+    ],
+    [
+      "vm_schema_migrations",
+      true
+    ],
+    [
+      "vm_stock_movements",
+      true
+    ],
+    [
+      "vm_suppliers",
+      true
+    ]
+  ],
+  "policy_count": 14,
+  "rpc_permissions": [
+    [
+      "vm_adjust_material_stock",
+      false,
+      true
+    ],
+    [
+      "vm_create_material",
+      false,
+      true
+    ],
+    [
+      "vm_create_organization",
+      false,
+      true
+    ],
+    [
+      "vm_receive_material",
+      false,
+      true
+    ],
+    [
+      "vm_upsert_product",
+      false,
+      true
+    ]
+  ],
+  "anonymous_material_read": false,
+  "direct_stock_update": false,
+  "direct_history_mutation": false
+}
