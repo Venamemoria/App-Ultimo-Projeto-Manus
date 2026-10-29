@@ -12,6 +12,8 @@ Evidência: `docs/foundation-verification.json` registra nove tabelas com RLS, 1
 
 Implementar login e sessão por Supabase Auth, sem usuário fictício ou bypass de autenticação na prévia. Associar usuário autenticado à organização autorizada; impedir que um cadastro público assuma privilégios em organização existente. Cobrir administração, produção, financeiro e leitura. Navegação, consultas e comandos devem respeitar permissões efetivas no banco, não somente esconder botões.
 
+Progresso: UI real de entrada/cadastro/recuperação/sessão e onboarding por RPC implementada; rotas privadas validam `getUser` no Supabase e memberships respeitam RLS. Typecheck, cinco testes de segurança/configuração e build passaram; Vite e manifesto retornaram HTTP 200. Dois redirects exatos foram persistidos no painel. Primeiro cadastro/login e criação da organização pelo proprietário ainda não verificados ao vivo; não foram criados usuários fictícios.
+
 ## [ ] Inventário, cadastro de insumos, compras e custo unitário
 
 Ao cadastrar Insumo com custo total e quantidade da embalagem, calcular automaticamente custo unitário fracionado (`custo total / quantidade da embalagem`) no backend e mostrar o cálculo na interface. Quantidade de embalagem maior que zero; quantidade e custo devem ser validados com precisão decimal. Registrar nome, categoria, unidade, saldo e limite de reposição. Permitir cadastro/consulta/edição controlada, filtros, alertas e histórico real. Distinguir saldo inicial sem despesa de uma compra que entra no estoque e tem vínculo financeiro. Usar numeric e cálculo decimal controlado, sem float nas regras de consumo. Não iniciar com dados demonstrativos.

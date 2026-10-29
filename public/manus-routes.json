@@ -1,0 +1,8 @@
+{
+  "routes": [
+    { "path": "/", "title": "Painel" },
+    { "path": "/entrar", "title": "Entrar" },
+    { "path": "/recuperar", "title": "Recuperar acesso" },
+    { "path": "/conta", "title": "Conta" }
+  ]
+}
