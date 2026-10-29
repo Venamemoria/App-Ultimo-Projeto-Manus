@@ -1,9 +1,9 @@
 {
   "migrations": [
     {
-      "version": "20261030002000_orders",
+      "version": "20261030002200_order_returns",
       "status": "applied",
-      "source_sha256": "d6fa4d2ba5948de5debbc53ab888ef86c94fdcfa0312b6abd94fc7cef8865dcb"
+      "source_sha256": "b1401fac507aa067d3cd4ea2d511a25b0add6f98ec1fe217c523930e17224bab"
     }
   ],
   "verification": "passed",
@@ -62,6 +62,14 @@
     ],
     [
       "public.vm_order_payments",
+      true
+    ],
+    [
+      "public.vm_order_return_events",
+      true
+    ],
+    [
+      "public.vm_order_return_lines",
       true
     ],
     [

@@ -47,6 +47,8 @@ CONTACTS_TEST = ROOT / "tests" / "database" / "contacts.sql"
 CONTACTS_MIGRATION = ROOT / "supabase" / "migrations" / "20261029235500_contacts.sql"
 ORDERS_TEST = ROOT / "tests" / "database" / "orders.sql"
 ORDERS_MIGRATION = ROOT / "supabase" / "migrations" / "20261030002000_orders.sql"
+ORDER_RETURNS_TEST = ROOT / "tests" / "database" / "order_returns.sql"
+ORDER_RETURNS_MIGRATION = ROOT / "supabase" / "migrations" / "20261030002200_order_returns.sql"
 
 AUTH_USER_A = "00000000-0000-0000-0000-0000000000a1"
 AUTH_USER_B = "00000000-0000-0000-0000-0000000000b2"
@@ -436,6 +438,10 @@ def selected_migrations(suite: str) -> list[Path]:
         if ORDERS_MIGRATION not in paths:
             raise RuntimeError("ORDERS_MIGRATION_MISSING")
         return [path for path in paths if path.name <= ORDERS_MIGRATION.name]
+    if suite == "order_returns":
+        if ORDER_RETURNS_MIGRATION not in paths:
+            raise RuntimeError("ORDER_RETURNS_MIGRATION_MISSING")
+        return [path for path in paths if path.name <= ORDER_RETURNS_MIGRATION.name]
     raise RuntimeError("UNKNOWN_SUITE")
 
 
@@ -576,7 +582,7 @@ def print_success(suite: str, migrations: list[str], labels: list[str]) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Execute isolated PostgreSQL QA suites")
-    parser.add_argument("--suite", choices=("foundation", "inventory", "products", "contacts", "orders"), default="foundation")
+    parser.add_argument("--suite", choices=("foundation", "inventory", "products", "contacts", "orders", "order_returns"), default="foundation")
     parser.add_argument("--stop", action="store_true", help="stop only this marked local cluster after the run")
     args = parser.parse_args()
     try:
@@ -587,7 +593,7 @@ def main() -> int:
         # marked cluster.  A default package cluster is never used as a fixture.
         drop_and_create_marked_database()
         bootstrap_roles_auth_and_users()
-        if args.suite in ("products", "contacts", "orders"):
+        if args.suite in ("products", "contacts", "orders", "order_returns"):
             bootstrap_storage_contract()
         preflight_local_database()
         if args.suite == "inventory" and not INVENTORY_TEST.is_file():
@@ -598,13 +604,16 @@ def main() -> int:
             raise RuntimeError("CONTACTS_SUITE_SQL_MISSING")
         if args.suite == "orders" and not ORDERS_TEST.is_file():
             raise RuntimeError("ORDERS_SUITE_SQL_MISSING")
+        if args.suite == "order_returns" and not ORDER_RETURNS_TEST.is_file():
+            raise RuntimeError("ORDER_RETURNS_SUITE_SQL_MISSING")
         migrations = apply_migrations(selected_migrations(args.suite))
         test_path = (
             FOUNDATION_TEST if args.suite == "foundation"
             else INVENTORY_TEST if args.suite == "inventory"
             else PRODUCTS_TEST if args.suite == "products"
             else CONTACTS_TEST if args.suite == "contacts"
-            else ORDERS_TEST
+            else ORDERS_TEST if args.suite == "orders"
+            else ORDER_RETURNS_TEST
         )
         labels = run_sql_suite(test_path)
         if args.suite == "orders":

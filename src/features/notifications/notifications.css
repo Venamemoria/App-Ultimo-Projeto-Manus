@@ -1,0 +1,25 @@
+.notification-bell-wrap { position: relative; display: flex; align-items: center; gap: 8px; }
+.notification-bell { min-height: 34px; padding: 7px 9px; }
+.notification-label { font-size: .74rem; }
+.notification-count { display: inline-grid; place-items: center; min-width: 19px; height: 19px; padding: 0 4px; border-radius: 999px; background: var(--terracotta); color: #fff; font-size: .64rem; }
+.realtime-state { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: .64rem; }
+.realtime-state > span { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
+.realtime-state.connected { color: var(--success); }
+.realtime-state.connected > span { background: var(--success); }
+.realtime-state.reconnecting { color: #765525; }
+.realtime-state.reconnecting > span { background: #c28b32; }
+.notification-popover { position: absolute; top: calc(100% + 9px); right: 0; z-index: 18; width: min(390px, calc(100vw - 38px)); max-height: 430px; overflow: auto; border: 1px solid var(--line); border-radius: 11px; background: var(--paper); box-shadow: var(--shadow); }
+.notification-popover-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px; border-bottom: 1px solid var(--line); }
+.notification-popover-heading strong { font-size: .8rem; }
+.notification-popover-heading span { color: var(--muted); font-size: .68rem; }
+.notification-list { display: grid; }
+.notification-row { display: flex; align-items: start; justify-content: space-between; gap: 9px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.notification-row:last-child { border-bottom: 0; }
+.notification-row.unread { background: #fff8ee; }
+.notification-row strong, .notification-row small { display: block; }
+.notification-row strong { font-size: .75rem; }
+.notification-row small { margin-top: 4px; color: var(--muted); font-size: .65rem; }
+.notification-row-actions { display: flex; gap: 2px; }
+.notification-empty { margin: 0; padding: 24px 14px; color: var(--muted); font-size: .76rem; line-height: 1.5; }
+.notification-error { color: var(--danger); }
+@media (max-width: 700px) { .app-header { align-items: start; } .app-header-context { display: none; } .notification-bell-wrap { margin-left: auto; } .notification-label { display: none; } }

@@ -12,6 +12,10 @@ const PurchasesPage = lazy(() => import('../features/purchases/PurchasesPage').t
 const ProductsPage = lazy(() => import('../features/products/ProductsPage').then((module) => ({ default: module.ProductsPage })));
 const ClientsPage = lazy(() => import('../features/contacts/ContactsPage').then((module) => ({ default: module.ClientsPage })));
 const SuppliersPage = lazy(() => import('../features/contacts/ContactsPage').then((module) => ({ default: module.SuppliersPage })));
+const OrdersPage = lazy(() => import('../features/orders/list').then((module) => ({ default: module.OrdersPage })));
+const OrderDetailPage = lazy(() => import('../features/orders/detail').then((module) => ({ default: module.OrderDetailPage })));
+const ProductionPage = lazy(() => import('../features/orders/board').then((module) => ({ default: module.ProductionPage })));
+const CalendarPage = lazy(() => import('../features/orders/calendar').then((module) => ({ default: module.CalendarPage })));
 
 function ProtectedRoute() {
   const { loading, session } = useSession();
@@ -36,6 +40,10 @@ export default function App() {
             <Route path="produtos" element={<ProductsPage />} />
             <Route path="clientes" element={<ClientsPage />} />
             <Route path="fornecedores" element={<SuppliersPage />} />
+            <Route path="pedidos" element={<OrdersPage />} />
+            <Route path="pedidos/:id" element={<OrderDetailPage />} />
+            <Route path="producao" element={<ProductionPage />} />
+            <Route path="agenda" element={<CalendarPage />} />
           </Route>
         </Route>
         <Route path="*" element={<Navigate replace to="/" />} />

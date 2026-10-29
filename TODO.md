@@ -1,6 +1,6 @@
 # Vê na Memória — entregas e critérios
 
-Plano aprovado pelo usuário em 29/10/2026. Fundação Supabase, autenticação/organização, inventário/compras e produtos/receitas estão implementados em fatias completas. A execução segue para cadastros e pedidos/orçamentos; ainda não há aplicação publicada. O schema evolui por migrations, preservando dados.
+Plano aprovado pelo usuário em 29/10/2026. Fundação Supabase, autenticação/organização, inventário/compras, produtos/receitas, cadastros e pedidos/baixa/produção/agenda/devolução auditada estão implementados. A execução segue para orçamento/rastreio público e paridade restante; ainda não há aplicação publicada. O schema evolui por migrations, preservando dados.
 
 ## [x] Fundação Supabase e segurança antes da UI
 
@@ -32,13 +32,19 @@ Inspecionar e implementar cadastros, busca, edição, importação/exportação 
 
 Evidência: schema aplicado/RLS, 12 grupos SQL isolados, `/clientes` e `/fornecedores` conectados a RPCs reais, edição completa/arquivo recuperável auditado, importação CSV atômica/preview e exportação dos registros atuais. Busca, endereço, PF/PJ e CNPJ alfanumérico, indicadores decimais por unidade implementados. Typecheck, 22 testes puros e build passaram; manifesto servido contém nove rotas. Não foram criados contatos/importações demonstrativos. Contagens/filtros de pedidos dependentes serão adicionados ao existir o contrato de pedidos.
 
-## [ ] Pedidos e baixa automática única, exata e transacional
+## [x] Pedidos e baixa automática única, exata e transacional
 
 Criar pedidos reais com cliente, itens, personalização, datas de pedido/produção/entrega, pagamentos e status. Ao marcar um Pedido como “Em Produção” OU diretamente como “Concluído”, deduzir automaticamente as frações exatas dos Insumos. A mudança posterior de “Em Produção” para “Concluído” NÃO deve deduzir novamente. Pedidos com vários itens somam consumo por insumo. Bloquear concorrência e usar restrição de unicidade para evitar segunda baixa. Validar todos os saldos antes da alteração; falta de qualquer insumo faz rollback integral de baixa/status/eventos. Não permitir baixa parcial nem saldo negativo. Congelar preços, composição e quantidades de consumo necessários ao histórico. Status, movimentos, histórico e evento de outbox são gravados na mesma transação. Não permitir edição silenciosa dos itens após baixa.
+
+Evidência: schema aplicado, 22 grupos PostgreSQL isolados incluindo duas conexões concorrentes/baixa agregada/rollback de dois materiais. `/pedidos` e detalhe conectados a RPCs reais e snapshots. 28 testes puros, typecheck e build passaram; nenhuma venda, pagamento ou baixa fictícia executada no Supabase.
 
 ## [ ] Fluxo de produção, consultas, agenda e cancelamento auditável
 
 Implementar lista, busca e filtros de pedidos por cliente/código, período, produto/serviço e status; histórico de vendas, saldos a receber, etapas/Kanban, calendário e tarefas conforme os fluxos de referência. Permitir navegar de pendências para os registros reais. Cancelamento antes da baixa não gera movimento de estoque. Depois da baixa, não devolver material automaticamente: estorno físico exige autorização administrativa, motivo e movimentos compensatórios auditáveis, impedindo duplo estorno. Reembolso financeiro é um fluxo separado. Não alterar retroativamente histórico concluído para esconder consumo.
+
+Evidência: Orders usa views/RLS e RPCs Supabase reais, lista paginada por UUID com restante, detalhe readonly de snapshots/eventos/consumos/pagamentos, Kanban com transições confirmadas e agenda mensal sem UTC. Notificações têm consulta própria, RPC de leitura e Postgres Changes com estado conectado/reconectando. `pnpm typecheck`, `pnpm test` (28 testes puros) e `pnpm build` passaram; nenhum dado de negócio, fixture, browser ou SQL foi criado pela UI.
+
+Devolução física: schema aplicado, nove grupos SQL isolados e formulário owner/admin integrado, motivo/quantidade física explícita, cap por consumo e replay sem duplo retorno. Nenhum retorno real de negócio criado. Pendências do item completo: gestão de tarefas; reembolso é um fluxo financeiro separado. Paridade não inspecionada continua aberta.
 
 ## [ ] Orçamentos interativos com URL pública e aceite
 

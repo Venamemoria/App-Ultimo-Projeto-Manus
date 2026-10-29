@@ -8,6 +8,10 @@
     { "path": "/compras", "title": "Registro de compras" },
     { "path": "/produtos", "title": "Produtos" },
     { "path": "/clientes", "title": "Clientes" },
-    { "path": "/fornecedores", "title": "Fornecedores" }
+    { "path": "/fornecedores", "title": "Fornecedores" },
+    { "path": "/pedidos", "title": "Pedidos" },
+    { "path": "/pedidos/:id", "title": "Detalhe do pedido" },
+    { "path": "/producao", "title": "Produção" },
+    { "path": "/agenda", "title": "Agenda" }
   ]
 }

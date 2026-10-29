@@ -33,6 +33,8 @@ export interface ContactBaseDto {
 
 export interface ClientDto extends ContactBaseDto {
   birth_date: string | null;
+  order_count?: string;
+  open_order_count?: string;
 }
 
 export interface SupplierDto extends ContactBaseDto {
