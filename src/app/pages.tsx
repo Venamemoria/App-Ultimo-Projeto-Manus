@@ -94,6 +94,7 @@ function OrganizationDashboard({ organizationId, organizationName }: { organizat
         <div className="form-actions dashboard-actions">
           <Link className="button button-secondary" to="/estoque"><Boxes size={16} />Cadastrar insumo</Link>
           <Link className="button button-secondary" to="/compras"><Package size={16} />Registrar compra</Link>
+          <Link className="button button-secondary" to="/produtos"><Package size={16} />Cadastrar produto</Link>
         </div>
         <div className="dashboard-real-status">
           <strong>{metrics.lowStock === null ? '—' : formatNumber(metrics.lowStock)}</strong>

@@ -1,6 +1,6 @@
 # Vê na Memória — entregas e critérios
 
-Plano aprovado pelo usuário em 29/10/2026. Fundação Supabase e autenticação/organização reais estão concluídas. A execução continua no inventário/compras/custo unitário e nas próximas fatias; ainda não há aplicação publicada. O schema evolui por migrations, preservando dados.
+Plano aprovado pelo usuário em 29/10/2026. Fundação Supabase, autenticação/organização, inventário/compras e produtos/receitas estão implementados em fatias completas. A execução segue para cadastros e pedidos/orçamentos; ainda não há aplicação publicada. O schema evolui por migrations, preservando dados.
 
 ## [x] Fundação Supabase e segurança antes da UI
 
@@ -20,9 +20,11 @@ Ao cadastrar Insumo com custo total e quantidade da embalagem, calcular automati
 
 Evidência: migration de inventário aplicada e registrada no Supabase, views negam acesso anônimo (HTTP 401), 16 grupos SQL isolados passaram. `/estoque` e `/compras` usam views textuais decimais e RPCs reais com papéis, motivo, retry idempotente e vínculo de compra/movimento/caixa. Cadastro, edição limitada, entrada sem despesa, ajuste, filtros, alertas, histórico e CSV implementados. Typecheck, 12 testes puros e build dividido em chunks passaram; manifesto servido contém as seis rotas reais. Nenhum insumo ou compra demonstrativa foi criado. Fotos/PDV e campos extras de paridade continuam no item próprio.
 
-## [ ] Produtos, variações, preços e composição por frações
+## [x] Produtos, variações, preços e composição por frações
 
 Produtos são compostos por quantidades fracionárias específicas de Insumos. Validar quantidades positivas e compatibilidade de unidade. Persistir a composição e calcular custo real de fabricação; versionar a receita. Cobrir os campos e fluxos inspecionados das referências, incluindo nome, categorias, imagens, preço, descrição e ajustes de produção. Alteração de catálogo/composição não deve modificar os snapshots de pedidos históricos. Arquivos e imagens devem ter persistência real e políticas de acesso.
+
+Evidência: schema/RLS/Storage privado aplicado, 11 grupos SQL isolados passaram, RPCs idempotentes e views decimais textuais conectadas a `/produtos`. Cadastro em quatro etapas, categorias, preços unidade/variação/m², promoções/faixas/mínimos, descrição/personalização/produção/frete, receitas base/próprias, versões e custo atual versus congelado. Upload/registro e URLs assinadas usam Supabase real; nenhum arquivo de demonstração enviado. Typecheck, 17 testes puros e build passaram; manifesto contém sete rotas. Runtime de upload HTTP não foi exercitado com arquivo fictício; controle de produto acabado, remoção sincronizada e vitrine ativa continuam pendentes.
 
 ## [ ] Pedidos e baixa automática única, exata e transacional
 

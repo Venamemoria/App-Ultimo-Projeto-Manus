@@ -97,8 +97,8 @@ export function assertSafeAnonKey(raw: string | undefined): string {
   return value;
 }
 
-export function getSafeNextPath(value: string | null | undefined): '/' | '/conta' | '/estoque' | '/compras' {
-  if (value === '/conta' || value === '/estoque' || value === '/compras') return value;
+export function getSafeNextPath(value: string | null | undefined): '/' | '/conta' | '/estoque' | '/compras' | '/produtos' {
+  if (value === '/conta' || value === '/estoque' || value === '/compras' || value === '/produtos') return value;
   return '/';
 }
 
