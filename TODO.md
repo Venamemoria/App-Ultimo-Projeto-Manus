@@ -8,11 +8,11 @@ Usar estritamente Vite, React, TypeScript, TailwindCSS e Supabase; manter o proj
 
 Evidência: `docs/foundation-verification.json` registra nove tabelas com RLS, 14 políticas, cinco RPCs sem execução anônima e bloqueio de leitura anônima de insumos e de alterações diretas em saldo/histórico. Migration transacional aplicada sem seed, reset ou redefinição de senha.
 
-## [ ] Autenticação, organização e permissões reais
+## [x] Autenticação, organização e permissões reais
 
 Implementar login e sessão por Supabase Auth, sem usuário fictício ou bypass de autenticação na prévia. Associar usuário autenticado à organização autorizada; impedir que um cadastro público assuma privilégios em organização existente. Cobrir administração, produção, financeiro e leitura. Navegação, consultas e comandos devem respeitar permissões efetivas no banco, não somente esconder botões.
 
-Progresso: UI real de entrada/cadastro/recuperação/sessão e onboarding por RPC implementada; rotas privadas validam `getUser` no Supabase e memberships respeitam RLS. Typecheck, cinco testes de segurança/configuração e build passaram; Vite e manifesto retornaram HTTP 200. Dois redirects exatos foram persistidos no painel. Primeiro cadastro/login e criação da organização pelo proprietário ainda não verificados ao vivo; não foram criados usuários fictícios.
+Evidência: UI real de entrada/cadastro/recuperação/sessão e onboarding por RPC implementada; rotas privadas validam `getUser` no Supabase e memberships respeitam RLS. Typecheck, cinco testes de segurança/configuração e build passaram; Vite e manifesto retornaram HTTP 200. Dois redirects exatos foram persistidos no painel. Em 29/10/2026 às 18:54 BRT, após o usuário realizar signup/login, o RPC criou a organização real Vê na Memória e a interface exibiu o papel proprietário e contagens autorizadas vazias de materiais/produtos/clientes. Nenhum usuário ou dado de negócio fictício foi criado.
 
 ## [ ] Inventário, cadastro de insumos, compras e custo unitário
 
