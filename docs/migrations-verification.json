@@ -1,55 +1,79 @@
 {
   "migrations": [
     {
-      "version": "20261029221500_inventory",
+      "version": "20261029233000_products",
       "status": "applied",
-      "source_sha256": "5b7a6631f41c84b57107080da939170b33ef3eebae4c44b9ba61d063beebf7f7"
+      "source_sha256": "881553761c72e121a83f64a85596563f2d8b44bd7861058613fc70ebf6c5f66f"
     }
   ],
   "verification": "passed",
   "tables_rls": [
     [
-      "vm_cash_entries",
+      "public.vm_cash_entries",
       true
     ],
     [
-      "vm_clients",
+      "public.vm_clients",
       true
     ],
     [
-      "vm_material_purchases",
+      "public.vm_material_purchases",
       true
     ],
     [
-      "vm_materials",
+      "public.vm_materials",
       true
     ],
     [
-      "vm_memberships",
+      "public.vm_memberships",
       true
     ],
     [
-      "vm_organizations",
+      "public.vm_organizations",
       true
     ],
     [
-      "vm_product_components",
+      "public.vm_product_components",
       true
     ],
     [
-      "vm_products",
+      "public.vm_product_files",
       true
     ],
     [
-      "vm_schema_migrations",
+      "public.vm_product_variant_components",
       true
     ],
     [
-      "vm_stock_movements",
+      "public.vm_product_variants",
       true
     ],
     [
-      "vm_suppliers",
+      "public.vm_product_versions",
+      true
+    ],
+    [
+      "public.vm_products",
+      true
+    ],
+    [
+      "public.vm_schema_migrations",
+      true
+    ],
+    [
+      "public.vm_stock_movements",
+      true
+    ],
+    [
+      "public.vm_suppliers",
+      true
+    ],
+    [
+      "vm_private.vm_material_creation_requests",
+      true
+    ],
+    [
+      "vm_private.vm_product_upsert_requests",
       true
     ]
   ]

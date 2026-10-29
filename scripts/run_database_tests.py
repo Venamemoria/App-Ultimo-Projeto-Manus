@@ -39,6 +39,8 @@ FOUNDATION = ROOT / "supabase" / "migrations" / "20261029203500_foundation.sql"
 MIGRATION_DIR = ROOT / "supabase" / "migrations"
 FOUNDATION_TEST = ROOT / "tests" / "database" / "foundation.sql"
 INVENTORY_TEST = ROOT / "tests" / "database" / "inventory.sql"
+PRODUCTS_TEST = ROOT / "tests" / "database" / "products.sql"
+PRODUCTS_MIGRATION = ROOT / "supabase" / "migrations" / "20261029233000_products.sql"
 
 AUTH_USER_A = "00000000-0000-0000-0000-0000000000a1"
 AUTH_USER_B = "00000000-0000-0000-0000-0000000000b2"
@@ -321,6 +323,62 @@ def bootstrap_roles_auth_and_users() -> None:
             raise RuntimeError("LOCAL_AUTH_FIXTURE_COUNT")
 
 
+def bootstrap_storage_contract() -> None:
+    """Create an isolated Storage-shaped contract for policy/RPC tests.
+
+    This is not a success stub and is never used by the application: it is a
+    local relational stand-in for the real Supabase Storage tables so Products
+    can test object existence, metadata checks, private RLS and path policies
+    without uploading to a production bucket.
+    """
+    with connect(DB_NAME) as conn:
+        conn.autocommit = True
+        conn.execute("CREATE SCHEMA storage")
+        conn.execute(
+            """
+            CREATE TABLE storage.buckets (
+              id text PRIMARY KEY,
+              name text NOT NULL,
+              owner_id uuid,
+              created_at timestamptz NOT NULL DEFAULT now(),
+              updated_at timestamptz NOT NULL DEFAULT now(),
+              public boolean NOT NULL DEFAULT false,
+              file_size_limit bigint,
+              allowed_mime_types text[]
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE storage.objects (
+              id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+              bucket_id text NOT NULL REFERENCES storage.buckets(id) ON DELETE CASCADE,
+              name text NOT NULL,
+              owner_id uuid,
+              created_at timestamptz NOT NULL DEFAULT now(),
+              updated_at timestamptz NOT NULL DEFAULT now(),
+              last_accessed_at timestamptz,
+              metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+              user_metadata jsonb,
+              UNIQUE (bucket_id, name)
+            )
+            """
+        )
+        conn.execute("ALTER TABLE storage.buckets ENABLE ROW LEVEL SECURITY")
+        conn.execute("ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY")
+        conn.execute("REVOKE ALL ON SCHEMA storage FROM PUBLIC")
+        conn.execute("GRANT USAGE ON SCHEMA storage TO anon, authenticated")
+        conn.execute("REVOKE ALL ON TABLE storage.buckets, storage.objects FROM PUBLIC, anon, authenticated")
+        conn.execute("GRANT SELECT ON TABLE storage.buckets TO authenticated")
+        conn.execute(
+            """
+            CREATE POLICY qa_storage_bucket_metadata_select
+            ON storage.buckets FOR SELECT TO authenticated
+            USING (id = 'vm-product-media')
+            """
+        )
+
+
 def preflight_local_database() -> None:
     with connect(DB_NAME) as conn:
         conn.autocommit = True
@@ -357,7 +415,13 @@ def selected_migrations(suite: str) -> list[Path]:
         # idempotent before the inventory correction is under test.
         return [FOUNDATION]
     if suite == "inventory":
-        return paths
+        if "20261029221500_inventory.sql" not in [p.name for p in paths]:
+            raise RuntimeError("INVENTORY_MIGRATION_MISSING")
+        return [path for path in paths if path.name <= "20261029221500_inventory.sql"]
+    if suite == "products":
+        if PRODUCTS_MIGRATION not in paths:
+            raise RuntimeError("PRODUCTS_MIGRATION_MISSING")
+        return [path for path in paths if path.name <= PRODUCTS_MIGRATION.name]
     raise RuntimeError("UNKNOWN_SUITE")
 
 
@@ -417,7 +481,7 @@ def print_success(suite: str, migrations: list[str], labels: list[str]) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Execute isolated PostgreSQL QA suites")
-    parser.add_argument("--suite", choices=("foundation", "inventory"), default="foundation")
+    parser.add_argument("--suite", choices=("foundation", "inventory", "products"), default="foundation")
     parser.add_argument("--stop", action="store_true", help="stop only this marked local cluster after the run")
     args = parser.parse_args()
     try:
@@ -428,11 +492,15 @@ def main() -> int:
         # marked cluster.  A default package cluster is never used as a fixture.
         drop_and_create_marked_database()
         bootstrap_roles_auth_and_users()
+        if args.suite == "products":
+            bootstrap_storage_contract()
         preflight_local_database()
         if args.suite == "inventory" and not INVENTORY_TEST.is_file():
             raise RuntimeError("INVENTORY_SUITE_SQL_MISSING")
+        if args.suite == "products" and not PRODUCTS_TEST.is_file():
+            raise RuntimeError("PRODUCTS_SUITE_SQL_MISSING")
         migrations = apply_migrations(selected_migrations(args.suite))
-        test_path = FOUNDATION_TEST if args.suite == "foundation" else INVENTORY_TEST
+        test_path = FOUNDATION_TEST if args.suite == "foundation" else INVENTORY_TEST if args.suite == "inventory" else PRODUCTS_TEST
         labels = run_sql_suite(test_path)
         print_success(args.suite, migrations, labels)
         if args.stop:

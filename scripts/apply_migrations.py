@@ -51,7 +51,7 @@ def main():
                 if not connection.execute("SELECT EXISTS(SELECT 1 FROM public.vm_schema_migrations WHERE version=%s)", (version,)).fetchone()[0]:
                     raise ValueError("MIGRATION_REGISTRY_MISSING")
                 reports.append({"version": version, "status": "applied", "source_sha256": digest})
-            tables = connection.execute("SELECT c.relname,c.relrowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind='r' AND c.relname LIKE 'vm_%' ORDER BY 1").fetchall()
+            tables = connection.execute("SELECT n.nspname||'.'||c.relname,c.relrowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN ('public','vm_private') AND c.relkind IN ('r','p') AND c.relname LIKE 'vm_%' ORDER BY 1").fetchall()
             if not all(enabled for _, enabled in tables):
                 raise ValueError("TABLE_WITHOUT_RLS")
             result = {"migrations": reports, "verification": "passed", "tables_rls": tables}

@@ -59,3 +59,33 @@ Resultado obtido: **16 grupos passaram, 0 falhas**. Foram aplicadas `20261029203
 Evidência do runner: database `vm_test`, socket Unix `/home/ubuntu/venamemoria/.local/test-db/socket`, `listen_addresses=''`, porta configurada `55432`, cluster marcado `/home/ubuntu/venamemoria/.local/test-db` e `pg_ctl: running`. O cluster foi deixado ativo para a próxima suite; para pará-lo explicitamente, use `--stop`.
 
 Esses 16 grupos são resultados somente do banco local isolado. Não constituem alegação de teste no Supabase autorizado, de teste de frontend, WebSocket/Realtime, integração externa ou app publicada.
+
+## Suite Products
+
+A suite `products` é executada no mesmo cluster PostgreSQL local marcado. O runner recria somente `vm_test`, aplica em ordem as migrations versionadas até `20261029233000_products.sql` (`foundation`, `inventory` e `products`) e executa somente `tests/database/products.sql`. O arquivo de teste declara seus próprios helpers de assertion e suas fixtures mínimas; ele não executa nem altera as suites `foundation` ou `inventory`.
+
+Execução:
+
+```bash
+/home/ubuntu/.venvs/venamemoria-db/bin/python scripts/run_database_tests.py --suite products
+```
+
+Resultado registrado: **11 grupos passaram, 0 falhas**. A versão revisada da migration Products foi processada pelo parser PostgreSQL em 69 statements SQL e seis funções PL/pgSQL. Isso é evidência do contrato no `vm_test` isolado, não aplicação da migration no Supabase, nem teste de UI, PostgREST em rede, WebSocket/Realtime ou aplicação publicada. A aplicação real posterior está registrada separadamente em `products-verification.md`.
+
+Os 11 grupos são:
+
+1. fixtures locais de Products e custo fracionário exato do material;
+2. views textuais Products com `security_invoker` e grants;
+3. campos do produto v1, tiers, variações e custo de composição calculado pelo banco;
+4. retry idempotente e colisão por payload diferente;
+5. unidade de cobrança `m2` e snapshots históricos imutáveis;
+6. barreiras contra RPC legada e mutação direta do histórico;
+7. validação de escala numérica, `NaN`, `Infinity`, MOQ, modo, tiers e unidade;
+8. isolamento de leitura e mutação entre tenants;
+9. bloqueio de mutação do catálogo pelo papel `finance`;
+10. bucket Storage privado, policy de path, verificação do objeto e registro dos metadados do arquivo;
+11. RLS do Storage sem vazamento entre tenants.
+
+As fixtures de Products são exclusivamente SQL local. O teste do Storage insere uma linha controlada em `storage.objects` para exercitar o contrato de bucket/policy e depois chama `vm_register_product_file` para verificar MIME e tamanho; isso é uma fixture do contrato local, **não** um upload HTTP, não um upload de runtime e não um download real. A suite também verifica que registrar arquivo inexistente, inserir diretamente na tabela de arquivos, usar path malicioso ou atravessar tenant falha.
+
+A suite Products não afirma que `vm-product-media` foi criado no Supabase real, que qualquer objeto foi enviado a Storage real ou que uma URL assinada foi emitida. O resultado mantém a distinção entre o banco local isolado e o ambiente Supabase autorizado.
