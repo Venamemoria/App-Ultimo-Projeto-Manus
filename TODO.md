@@ -26,9 +26,11 @@ Produtos são compostos por quantidades fracionárias específicas de Insumos. V
 
 Evidência: schema/RLS/Storage privado aplicado, 11 grupos SQL isolados passaram, RPCs idempotentes e views decimais textuais conectadas a `/produtos`. Cadastro em quatro etapas, categorias, preços unidade/variação/m², promoções/faixas/mínimos, descrição/personalização/produção/frete, receitas base/próprias, versões e custo atual versus congelado. Upload/registro e URLs assinadas usam Supabase real; nenhum arquivo de demonstração enviado. Typecheck, 17 testes puros e build passaram; manifesto contém sete rotas. Runtime de upload HTTP não foi exercitado com arquivo fictício; controle de produto acabado, remoção sincronizada e vitrine ativa continuam pendentes.
 
-## [ ] Clientes e fornecedores reais vinculados à organização
+## [x] Clientes e fornecedores reais vinculados à organização
 
 Inspecionar e implementar cadastros, busca, edição, importação/exportação e indicadores reais de clientes/fornecedores. Clientes incluem pessoa física/jurídica, nome obrigatório, CPF/CNPJ, nascimento aplicável, contato/e-mail e endereço para frete (CEP, rua, número, bairro, complemento, cidade/UF). Fornecedores incluem nome, telefone, e-mail, CPF/CNPJ, site e observações, lista/detalhe e indicadores de insumos vinculados. Respeitar RLS e papéis, preservar compras/pedidos históricos, não copiar dados pessoais da referência nem gerar contatos de demonstração. Filtros relacionados a pedidos dependem de registros reais e não devem mostrar zeros fictícios ou sucesso simulado.
+
+Evidência: schema aplicado/RLS, 12 grupos SQL isolados, `/clientes` e `/fornecedores` conectados a RPCs reais, edição completa/arquivo recuperável auditado, importação CSV atômica/preview e exportação dos registros atuais. Busca, endereço, PF/PJ e CNPJ alfanumérico, indicadores decimais por unidade implementados. Typecheck, 22 testes puros e build passaram; manifesto servido contém nove rotas. Não foram criados contatos/importações demonstrativos. Contagens/filtros de pedidos dependentes serão adicionados ao existir o contrato de pedidos.
 
 ## [ ] Pedidos e baixa automática única, exata e transacional
 

@@ -6,6 +6,8 @@
     { "path": "/conta", "title": "Conta" },
     { "path": "/estoque", "title": "Inventário de materiais" },
     { "path": "/compras", "title": "Registro de compras" },
-    { "path": "/produtos", "title": "Produtos" }
+    { "path": "/produtos", "title": "Produtos" },
+    { "path": "/clientes", "title": "Clientes" },
+    { "path": "/fornecedores", "title": "Fornecedores" }
   ]
 }

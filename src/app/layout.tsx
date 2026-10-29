@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { CircleUserRound, LayoutDashboard, LogOut, Menu, PackageSearch, PackagePlus, ReceiptText, X } from 'lucide-react';
+import { CircleUserRound, LayoutDashboard, LogOut, Menu, PackageSearch, PackagePlus, ReceiptText, UsersRound, X } from 'lucide-react';
 import { Alert, Button } from '../components/ui';
 import { initials } from '../lib/format';
 import { useSession } from './AuthProvider';
@@ -54,6 +54,9 @@ export function AppLayout() {
           <NavLink className={navClass} to="/estoque"><PackageSearch size={18} aria-hidden="true" /> <span>Inventário</span></NavLink>
           <NavLink className={navClass} to="/compras"><ReceiptText size={18} aria-hidden="true" /> <span>Registro de compras</span></NavLink>
           <NavLink className={navClass} to="/produtos"><PackagePlus size={18} aria-hidden="true" /> <span>Produtos</span></NavLink>
+          <div className="context-label">Relacionamento</div>
+          <NavLink className={navClass} to="/clientes"><UsersRound size={18} aria-hidden="true" /> <span>Clientes</span></NavLink>
+          <NavLink className={navClass} to="/fornecedores"><UsersRound size={18} aria-hidden="true" /> <span>Fornecedores</span></NavLink>
           <NavLink className={navClass} to="/conta"><CircleUserRound size={18} aria-hidden="true" /> <span>Conta</span></NavLink>
         </nav>
         <div className="sidebar-footer">

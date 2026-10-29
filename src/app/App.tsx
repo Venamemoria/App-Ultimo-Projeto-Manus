@@ -10,6 +10,8 @@ import { getSafeNextPath } from '../lib/supabase';
 const InventoryPage = lazy(() => import('../features/inventory/InventoryPage').then((module) => ({ default: module.InventoryPage })));
 const PurchasesPage = lazy(() => import('../features/purchases/PurchasesPage').then((module) => ({ default: module.PurchasesPage })));
 const ProductsPage = lazy(() => import('../features/products/ProductsPage').then((module) => ({ default: module.ProductsPage })));
+const ClientsPage = lazy(() => import('../features/contacts/ContactsPage').then((module) => ({ default: module.ClientsPage })));
+const SuppliersPage = lazy(() => import('../features/contacts/ContactsPage').then((module) => ({ default: module.SuppliersPage })));
 
 function ProtectedRoute() {
   const { loading, session } = useSession();
@@ -32,6 +34,8 @@ export default function App() {
             <Route path="estoque" element={<InventoryPage />} />
             <Route path="compras" element={<PurchasesPage />} />
             <Route path="produtos" element={<ProductsPage />} />
+            <Route path="clientes" element={<ClientsPage />} />
+            <Route path="fornecedores" element={<SuppliersPage />} />
           </Route>
         </Route>
         <Route path="*" element={<Navigate replace to="/" />} />

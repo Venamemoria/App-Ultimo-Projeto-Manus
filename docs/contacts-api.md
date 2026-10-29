@@ -10,7 +10,7 @@ Este documento descreve o contrato definido por:
 
 A migration foi aplicada no Supabase autorizado em 29/10/2026 após 12 grupos SQL isolados aprovados. O relatório incremental confirmou RLS nas tabelas públicas/privadas e o registro transacional da versão. Nenhum contato/importação demonstrativo foi criado no Supabase. Isso não é publicação do frontend.
 
-A UI de clientes/fornecedores permanece pendente de conexão a este contrato. A referência de UI foi observada somente em modo de leitura e não representa cadastro, importação, edição ou exclusão de dados reais. Os casos locais usam identidades, organizações e valores sintéticos; este documento não contém nem afirma PII de fixtures.
+A UI `/clientes` e `/fornecedores` está conectada a este contrato, incluindo formulário, archive/recuperação e CSV; typecheck, 22 testes puros e build passaram. Nenhum contato ou importação de demonstração foi realizado no Supabase. A referência foi lida sem alterar registros. Fixtures SQL existem somente no cluster isolado, não no app.
 
 As funções `public.vm_*` são chamadas pelo Supabase Data API/PostgREST com `supabase.rpc(...)`. A aplicação deve usar uma sessão Supabase Auth real. A identidade efetiva vem de `auth.uid()` e o papel de sessão de `auth.role()`; não se envia `user_id` ou `created_by` para escolher o autor.
 
