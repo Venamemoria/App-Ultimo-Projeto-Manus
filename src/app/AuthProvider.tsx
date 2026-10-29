@@ -76,6 +76,7 @@ export function AuthProvider({ children, queryClient }: { children: ReactNode; q
   const [selectedOrganizationId, setSelectedOrganizationId] = useState<string | null>(null);
   const [recoveryMode, setRecoveryMode] = useState(false);
   const previousUserId = useRef<string | null>(null);
+  const previousOrganizationId = useRef<string | null>(null);
 
   useEffect(() => {
     if (!supabase) {
@@ -182,9 +183,17 @@ export function AuthProvider({ children, queryClient }: { children: ReactNode; q
       setSelectedOrganizationId(null);
       setMemberships([]);
       previousUserId.current = userId;
+      previousOrganizationId.current = null;
     }
     if (userId) void refreshMemberships();
   }, [queryClient, refreshMemberships, session?.user.id]);
+
+  useEffect(() => {
+    if (previousOrganizationId.current && selectedOrganizationId && previousOrganizationId.current !== selectedOrganizationId) {
+      queryClient.clear();
+    }
+    previousOrganizationId.current = selectedOrganizationId;
+  }, [queryClient, selectedOrganizationId]);
 
   useEffect(() => {
     if (!memberships.length) {
