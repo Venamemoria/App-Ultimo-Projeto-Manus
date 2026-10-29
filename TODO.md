@@ -14,9 +14,11 @@ Implementar login e sessão por Supabase Auth, sem usuário fictício ou bypass 
 
 Evidência: UI real de entrada/cadastro/recuperação/sessão e onboarding por RPC implementada; rotas privadas validam `getUser` no Supabase e memberships respeitam RLS. Typecheck, cinco testes de segurança/configuração e build passaram; Vite e manifesto retornaram HTTP 200. Dois redirects exatos foram persistidos no painel. Em 29/10/2026 às 18:54 BRT, após o usuário realizar signup/login, o RPC criou a organização real Vê na Memória e a interface exibiu o papel proprietário e contagens autorizadas vazias de materiais/produtos/clientes. Nenhum usuário ou dado de negócio fictício foi criado.
 
-## [ ] Inventário, cadastro de insumos, compras e custo unitário
+## [x] Inventário, cadastro de insumos, compras e custo unitário
 
 Ao cadastrar Insumo com custo total e quantidade da embalagem, calcular automaticamente custo unitário fracionado (`custo total / quantidade da embalagem`) no backend e mostrar o cálculo na interface. Quantidade de embalagem maior que zero; quantidade e custo devem ser validados com precisão decimal. Registrar nome, categoria, unidade, saldo e limite de reposição. Permitir cadastro/consulta/edição controlada, filtros, alertas e histórico real. Distinguir saldo inicial sem despesa de uma compra que entra no estoque e tem vínculo financeiro. Usar numeric e cálculo decimal controlado, sem float nas regras de consumo. Não iniciar com dados demonstrativos.
+
+Evidência: migration de inventário aplicada e registrada no Supabase, views negam acesso anônimo (HTTP 401), 16 grupos SQL isolados passaram. `/estoque` e `/compras` usam views textuais decimais e RPCs reais com papéis, motivo, retry idempotente e vínculo de compra/movimento/caixa. Cadastro, edição limitada, entrada sem despesa, ajuste, filtros, alertas, histórico e CSV implementados. Typecheck, 12 testes puros e build dividido em chunks passaram; manifesto servido contém as seis rotas reais. Nenhum insumo ou compra demonstrativa foi criado. Fotos/PDV e campos extras de paridade continuam no item próprio.
 
 ## [ ] Produtos, variações, preços e composição por frações
 

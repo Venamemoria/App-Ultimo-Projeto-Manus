@@ -3,6 +3,8 @@
     { "path": "/", "title": "Painel" },
     { "path": "/entrar", "title": "Entrar" },
     { "path": "/recuperar", "title": "Recuperar acesso" },
-    { "path": "/conta", "title": "Conta" }
+    { "path": "/conta", "title": "Conta" },
+    { "path": "/estoque", "title": "Inventário de materiais" },
+    { "path": "/compras", "title": "Registro de compras" }
   ]
 }

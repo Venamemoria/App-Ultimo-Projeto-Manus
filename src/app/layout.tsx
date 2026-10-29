@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { CircleUserRound, LayoutDashboard, LogOut, Menu, X } from 'lucide-react';
+import { CircleUserRound, LayoutDashboard, LogOut, Menu, PackageSearch, ReceiptText, X } from 'lucide-react';
 import { Alert, Button } from '../components/ui';
 import { initials } from '../lib/format';
 import { useSession } from './AuthProvider';
@@ -50,6 +50,9 @@ export function AppLayout() {
         <div className="context-label">Ateliê</div>
         <nav className="sidebar-nav">
           <NavLink className={navClass} to="/" end><LayoutDashboard size={18} aria-hidden="true" /> <span>Painel</span></NavLink>
+          <div className="context-label">Estoque &amp; Custos</div>
+          <NavLink className={navClass} to="/estoque"><PackageSearch size={18} aria-hidden="true" /> <span>Inventário</span></NavLink>
+          <NavLink className={navClass} to="/compras"><ReceiptText size={18} aria-hidden="true" /> <span>Registro de compras</span></NavLink>
           <NavLink className={navClass} to="/conta"><CircleUserRound size={18} aria-hidden="true" /> <span>Conta</span></NavLink>
         </nav>
         <div className="sidebar-footer">

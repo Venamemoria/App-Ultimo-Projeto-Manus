@@ -97,8 +97,9 @@ export function assertSafeAnonKey(raw: string | undefined): string {
   return value;
 }
 
-export function getSafeNextPath(value: string | null | undefined): '/' | '/conta' {
-  return value === '/conta' ? '/conta' : '/';
+export function getSafeNextPath(value: string | null | undefined): '/' | '/conta' | '/estoque' | '/compras' {
+  if (value === '/conta' || value === '/estoque' || value === '/compras') return value;
+  return '/';
 }
 
 export function readSupabaseConfig(): { url: string; anonKey: string } {

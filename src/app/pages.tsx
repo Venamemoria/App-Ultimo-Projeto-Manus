@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Building2, Boxes, ContactRound, Package, UserRound } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { Alert, Button, EmptyState, Field, Input, Loading, PageHeader, Select, StatCard } from '../components/ui';
 import { formatNumber, initials } from '../lib/format';
 import { supabase } from '../lib/supabase';
@@ -7,6 +8,7 @@ import { useSession } from './AuthProvider';
 
 interface Metrics {
   materials: number | null;
+  lowStock: number | null;
   products: number | null;
   clients: number | null;
 }
@@ -26,14 +28,14 @@ export function DashboardPage() {
 
 function OrganizationDashboard({ organizationId, organizationName }: { organizationId: string; organizationName: string }) {
   const { memberships, selectOrganization } = useSession();
-  const [metrics, setMetrics] = useState<Metrics>({ materials: null, products: null, clients: null });
+    const [metrics, setMetrics] = useState<Metrics>({ materials: null, lowStock: null, products: null, clients: null });
   const [loading, setLoading] = useState(true);
   const [metricsError, setMetricsError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
-    setMetrics({ materials: null, products: null, clients: null });
+    setMetrics({ materials: null, lowStock: null, products: null, clients: null });
     setMetricsError(null);
 
     if (!supabase) {
@@ -45,14 +47,15 @@ function OrganizationDashboard({ organizationId, organizationName }: { organizat
 
     const load = async () => {
       const [materials, products, clients] = await Promise.all([
-        client.from('vm_materials').select('id', { count: 'exact', head: true }).eq('organization_id', organizationId),
+        client.from('vm_materials_read').select('id, is_low_stock').eq('organization_id', organizationId),
         client.from('vm_products').select('id', { count: 'exact', head: true }).eq('organization_id', organizationId),
         client.from('vm_clients').select('id', { count: 'exact', head: true }).eq('organization_id', organizationId),
       ]);
       if (!active) return;
       const errors = [materials.error, products.error, clients.error].filter(Boolean);
       setMetrics({
-        materials: materials.error ? null : materials.count ?? 0,
+        materials: materials.error ? null : materials.data?.length ?? 0,
+        lowStock: materials.error ? null : (materials.data ?? []).filter((material) => material.is_low_stock).length,
         products: products.error ? null : products.count ?? 0,
         clients: clients.error ? null : clients.count ?? 0,
       });
@@ -87,8 +90,16 @@ function OrganizationDashboard({ organizationId, organizationName }: { organizat
         </div>
       )}
       <section className="panel">
-        <div className="panel-heading"><div><h2>Seu espaço começa aqui</h2><p>Os próximos módulos aparecem quando tiverem um fluxo real para conectar ao banco.</p></div></div>
-        <EmptyState title="Nenhuma atividade adicional nesta fatia" description="Este painel mostra apenas a organização ativa e as contagens autorizadas pela sua sessão. Não há dados demonstrativos para preencher a tela." />
+        <div className="panel-heading"><div><h2>Próximos passos reais</h2><p>Comece pelos registros que já estão conectados ao banco desta organização.</p></div></div>
+        <div className="form-actions dashboard-actions">
+          <Link className="button button-secondary" to="/estoque"><Boxes size={16} />Cadastrar insumo</Link>
+          <Link className="button button-secondary" to="/compras"><Package size={16} />Registrar compra</Link>
+        </div>
+        <div className="dashboard-real-status">
+          <strong>{metrics.lowStock === null ? '—' : formatNumber(metrics.lowStock)}</strong>
+          <span>alertas de reposição consultados no inventário real</span>
+          <Link className="text-link" to="/estoque">Ver inventário</Link>
+        </div>
       </section>
     </>
   );

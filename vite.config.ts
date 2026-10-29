@@ -20,6 +20,17 @@ export default defineConfig(({ mode }) => {
   }
   return {
     plugins: [react(), tailwindcss()],
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            react: ['react', 'react-dom', 'react-router-dom'],
+            supabase: ['@supabase/supabase-js'],
+            query: ['@tanstack/react-query'],
+          },
+        },
+      },
+    },
     server: { host: '0.0.0.0', port: 3000, strictPort: true },
   };
 });
