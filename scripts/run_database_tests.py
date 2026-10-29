@@ -11,10 +11,12 @@ This harness is deliberately separate from Supabase and from the application:
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import json
 import os
 import subprocess
 import sys
+from threading import Barrier
 from pathlib import Path
 from typing import Iterable
 
@@ -43,6 +45,8 @@ PRODUCTS_TEST = ROOT / "tests" / "database" / "products.sql"
 PRODUCTS_MIGRATION = ROOT / "supabase" / "migrations" / "20261029233000_products.sql"
 CONTACTS_TEST = ROOT / "tests" / "database" / "contacts.sql"
 CONTACTS_MIGRATION = ROOT / "supabase" / "migrations" / "20261029235500_contacts.sql"
+ORDERS_TEST = ROOT / "tests" / "database" / "orders.sql"
+ORDERS_MIGRATION = ROOT / "supabase" / "migrations" / "20261030002000_orders.sql"
 
 AUTH_USER_A = "00000000-0000-0000-0000-0000000000a1"
 AUTH_USER_B = "00000000-0000-0000-0000-0000000000b2"
@@ -428,6 +432,10 @@ def selected_migrations(suite: str) -> list[Path]:
         if CONTACTS_MIGRATION not in paths:
             raise RuntimeError("CONTACTS_MIGRATION_MISSING")
         return [path for path in paths if path.name <= CONTACTS_MIGRATION.name]
+    if suite == "orders":
+        if ORDERS_MIGRATION not in paths:
+            raise RuntimeError("ORDERS_MIGRATION_MISSING")
+        return [path for path in paths if path.name <= ORDERS_MIGRATION.name]
     raise RuntimeError("UNKNOWN_SUITE")
 
 
@@ -468,6 +476,87 @@ def run_sql_suite(test_path: Path) -> list[str]:
             raise
 
 
+def run_orders_concurrency_probe() -> list[str]:
+    """Exercise one status transition through two real local psycopg sessions.
+
+    The SQL suite creates the named pending order and commits it before this
+    probe. Both sessions use the local Unix socket, the real authenticated role,
+    and the same Auth GUC contract; this is deliberately not an app mock.
+    """
+    with connect(DB_NAME) as conn:
+        conn.autocommit = False
+        conn.execute("SET ROLE authenticated")
+        conn.execute("SELECT set_config('request.jwt.claim.sub', %s, false)", (AUTH_USER_A,))
+        conn.execute("SELECT set_config('request.jwt.claim.role', 'authenticated', false)")
+        conn.execute(
+            "SELECT set_config('request.jwt.claims', %s, false)",
+            (json.dumps({"sub": AUTH_USER_A, "role": "authenticated"}),),
+        )
+        target = conn.execute(
+            """
+            SELECT organization_id, id
+            FROM public.vm_orders_read
+            WHERE title = 'QA concurrency order'
+            ORDER BY id
+            LIMIT 1
+            """
+        ).fetchone()
+        conn.rollback()
+    if target is None:
+        raise RuntimeError("ORDERS_CONCURRENCY_FIXTURE_MISSING")
+
+    organization_id, order_id = target
+    barrier = Barrier(2)
+    keys = (
+        "40000000-0000-0000-0000-000000000201",
+        "40000000-0000-0000-0000-000000000202",
+    )
+
+    def attempt(key: str):
+        with connect(DB_NAME) as conn:
+            try:
+                conn.execute("SET ROLE authenticated")
+                conn.execute("SELECT set_config('request.jwt.claim.sub', %s, false)", (AUTH_USER_A,))
+                conn.execute("SELECT set_config('request.jwt.claim.role', 'authenticated', false)")
+                conn.execute(
+                    "SELECT set_config('request.jwt.claims', %s, false)",
+                    (json.dumps({"sub": AUTH_USER_A, "role": "authenticated"}),),
+                )
+                barrier.wait(timeout=10)
+                result = conn.execute(
+                    """
+                    SELECT status, status_version, changed
+                    FROM public.vm_set_order_status(%s, %s, 'Em Produção', NULL, %s)
+                    """,
+                    (organization_id, order_id, key),
+                ).fetchone()
+                conn.commit()
+                return result
+            except BaseException:
+                conn.rollback()
+                raise
+
+    with ThreadPoolExecutor(max_workers=2, thread_name_prefix="orders-qa") as pool:
+        results = list(pool.map(attempt, keys))
+    if sorted(bool(result[2]) for result in results) != [False, True]:
+        raise RuntimeError("ORDERS_CONCURRENCY_EXPECTED_ONE_CHANGE_ONE_NOOP")
+    if any(result[0] != "Em Produção" or result[1] != "2" for result in results):
+        raise RuntimeError("ORDERS_CONCURRENCY_STATUS_VERSION_MISMATCH")
+
+    with connect(DB_NAME) as conn:
+        counts = conn.execute(
+            """
+            SELECT
+              (SELECT count(*) FROM public.vm_order_events WHERE organization_id = %s AND order_id = %s),
+              (SELECT count(*) FROM public.vm_order_consumptions WHERE organization_id = %s AND order_id = %s)
+            """,
+            (organization_id, order_id, organization_id, order_id),
+        ).fetchone()
+    if counts != (2, 1):
+        raise RuntimeError("ORDERS_CONCURRENCY_DUPLICATE_EVENT_OR_DEDUCTION")
+    return ["real two-connection status serialization"]
+
+
 def print_success(suite: str, migrations: list[str], labels: list[str]) -> None:
     status = {
         "status": "passed",
@@ -487,7 +576,7 @@ def print_success(suite: str, migrations: list[str], labels: list[str]) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Execute isolated PostgreSQL QA suites")
-    parser.add_argument("--suite", choices=("foundation", "inventory", "products", "contacts"), default="foundation")
+    parser.add_argument("--suite", choices=("foundation", "inventory", "products", "contacts", "orders"), default="foundation")
     parser.add_argument("--stop", action="store_true", help="stop only this marked local cluster after the run")
     args = parser.parse_args()
     try:
@@ -498,7 +587,7 @@ def main() -> int:
         # marked cluster.  A default package cluster is never used as a fixture.
         drop_and_create_marked_database()
         bootstrap_roles_auth_and_users()
-        if args.suite in ("products", "contacts"):
+        if args.suite in ("products", "contacts", "orders"):
             bootstrap_storage_contract()
         preflight_local_database()
         if args.suite == "inventory" and not INVENTORY_TEST.is_file():
@@ -507,14 +596,19 @@ def main() -> int:
             raise RuntimeError("PRODUCTS_SUITE_SQL_MISSING")
         if args.suite == "contacts" and not CONTACTS_TEST.is_file():
             raise RuntimeError("CONTACTS_SUITE_SQL_MISSING")
+        if args.suite == "orders" and not ORDERS_TEST.is_file():
+            raise RuntimeError("ORDERS_SUITE_SQL_MISSING")
         migrations = apply_migrations(selected_migrations(args.suite))
         test_path = (
             FOUNDATION_TEST if args.suite == "foundation"
             else INVENTORY_TEST if args.suite == "inventory"
             else PRODUCTS_TEST if args.suite == "products"
-            else CONTACTS_TEST
+            else CONTACTS_TEST if args.suite == "contacts"
+            else ORDERS_TEST
         )
         labels = run_sql_suite(test_path)
+        if args.suite == "orders":
+            labels.extend(run_orders_concurrency_probe())
         print_success(args.suite, migrations, labels)
         if args.stop:
             stop_cluster()

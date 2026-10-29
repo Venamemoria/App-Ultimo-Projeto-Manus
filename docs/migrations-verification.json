@@ -1,9 +1,9 @@
 {
   "migrations": [
     {
-      "version": "20261029235500_contacts",
+      "version": "20261030002000_orders",
       "status": "applied",
-      "source_sha256": "edeeff7e80009e9f0fe922dc08368670848483d0db0cca36804544e2e48b2d60"
+      "source_sha256": "d6fa4d2ba5948de5debbc53ab888ef86c94fdcfa0312b6abd94fc7cef8865dcb"
     }
   ],
   "verification": "passed",
@@ -30,6 +30,42 @@
     ],
     [
       "public.vm_memberships",
+      true
+    ],
+    [
+      "public.vm_notification_outbox",
+      true
+    ],
+    [
+      "public.vm_notifications",
+      true
+    ],
+    [
+      "public.vm_order_consumption_runs",
+      true
+    ],
+    [
+      "public.vm_order_consumptions",
+      true
+    ],
+    [
+      "public.vm_order_events",
+      true
+    ],
+    [
+      "public.vm_order_item_materials",
+      true
+    ],
+    [
+      "public.vm_order_items",
+      true
+    ],
+    [
+      "public.vm_order_payments",
+      true
+    ],
+    [
+      "public.vm_orders",
       true
     ],
     [
@@ -82,6 +118,14 @@
     ],
     [
       "vm_private.vm_material_creation_requests",
+      true
+    ],
+    [
+      "vm_private.vm_order_client_snapshots",
+      true
+    ],
+    [
+      "vm_private.vm_order_requests",
       true
     ],
     [

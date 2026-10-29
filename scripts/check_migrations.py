@@ -1,20 +1,27 @@
-"""Parse PostgreSQL and PL/pgSQL migration syntax without connecting to a database.
+"""Parse PostgreSQL/PLpgSQL migration syntax; never connect to a database.
 
-Install pglast in an isolated Python environment, then run this script.
-This is syntax validation, not a claim that a migration has been applied.
+Install pglast in the isolated optional QA environment. Parsing does not prove
+execution, permissions, data safety, or that a migration was applied.
 """
 from pathlib import Path
 import re
 from pglast import parse_sql, parse_plpgsql
 
-root = Path(__file__).resolve().parents[1] / "supabase" / "migrations"
-for path in sorted(root.glob("*.sql")):
-    source = path.read_text()
+ROOT = Path(__file__).resolve().parents[1] / "supabase" / "migrations"
+FUNCTION = re.compile(
+    r"\bCREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\b.*?\$function\$;",
+    re.IGNORECASE | re.DOTALL,
+)
+DO = re.compile(r"\bDO\s+\$(\w*)\$.*?\$\1\$;", re.IGNORECASE | re.DOTALL)
+LANGUAGE = re.compile(r"\bLANGUAGE\s+plpgsql\b", re.IGNORECASE)
+
+for path in sorted(ROOT.glob("*.sql")):
+    source = path.read_text(encoding="utf-8")
     statements = parse_sql(source)
-    blocks = re.findall(r"CREATE OR REPLACE FUNCTION .*?\$function\$;", source, re.S)
-    functions = [block for block in blocks if "LANGUAGE plpgsql" in block]
-    for block in functions:
-        parse_plpgsql(block)
-    if not source.startswith("BEGIN;") or not source.strip().endswith("COMMIT;"):
+    functions = [match.group(0) for match in FUNCTION.finditer(source) if LANGUAGE.search(match.group(0))]
+    blocks = [match.group(0) for match in DO.finditer(source)]
+    for unit in [*functions, *blocks]:
+        parse_plpgsql(unit)
+    if not source.lstrip().startswith("BEGIN;") or not source.strip().endswith("COMMIT;"):
         raise ValueError(f"Migration must be transactional: {path.name}")
-    print(f"{path.name}: {len(statements)} statements, {len(functions)} PL/pgSQL functions parsed")
+    print(f"{path.name}: {len(statements)} statements, {len(functions)} PL/pgSQL functions and {len(blocks)} DO blocks parsed")
