@@ -1,0 +1,7 @@
+# Realtime e eventos de status
+
+Consulta de metadados somente READ ONLY ao Supabase autorizado em 29/10/2026 confirmou as funções `realtime.send(payload jsonb, event text, topic text, private boolean)` e `realtime.broadcast_changes(topic_name text, event_name text, operation text, table_name text, table_schema text, new record, old record, level text)`. A extensão supabase_vault está instalada; pg_cron e pg_net não foram encontradas entre as extensões instaladas na consulta. Isso não prova que sejam indisponíveis para habilitação futura.
+
+Eventos devem ser gravados junto à transação do pedido; notificações internas só divulgam dados de organização autorizada. Público usa projeção mínima por token opaco. Broadcast público, se adotado, precisa de topic imprevisível, payload sem PII/custo e sender que deixe de divulgar após revogação/expiração; o navegador trata o broadcast apenas como sinal para recarregar a projeção verdadeira, não como status confiável vindo de terceiros.
+
+Outbox WhatsApp é persistida e processada por função server-side/Supabase hospedado, não um loop residente neste Sandbox que hiberna. Falha e retry ficam registrados; entrega só é confirmada após resposta real do provedor. Scheduler/assinatura/configuração e permissões de cron precisam existir antes de declarar envio automático ativo. Nenhum evento de pedido ou mensagem demonstrativa foi criado/enviado nesta preparação.

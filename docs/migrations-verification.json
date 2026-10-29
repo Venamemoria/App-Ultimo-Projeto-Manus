@@ -1,9 +1,9 @@
 {
   "migrations": [
     {
-      "version": "20261029233000_products",
+      "version": "20261029235500_contacts",
       "status": "applied",
-      "source_sha256": "881553761c72e121a83f64a85596563f2d8b44bd7861058613fc70ebf6c5f66f"
+      "source_sha256": "edeeff7e80009e9f0fe922dc08368670848483d0db0cca36804544e2e48b2d60"
     }
   ],
   "verification": "passed",
@@ -14,6 +14,10 @@
     ],
     [
       "public.vm_clients",
+      true
+    ],
+    [
+      "public.vm_contact_events",
       true
     ],
     [
@@ -66,6 +70,14 @@
     ],
     [
       "public.vm_suppliers",
+      true
+    ],
+    [
+      "vm_private.vm_contact_import_requests",
+      true
+    ],
+    [
+      "vm_private.vm_contact_upsert_requests",
       true
     ],
     [

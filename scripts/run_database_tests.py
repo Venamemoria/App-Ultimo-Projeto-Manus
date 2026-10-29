@@ -41,6 +41,8 @@ FOUNDATION_TEST = ROOT / "tests" / "database" / "foundation.sql"
 INVENTORY_TEST = ROOT / "tests" / "database" / "inventory.sql"
 PRODUCTS_TEST = ROOT / "tests" / "database" / "products.sql"
 PRODUCTS_MIGRATION = ROOT / "supabase" / "migrations" / "20261029233000_products.sql"
+CONTACTS_TEST = ROOT / "tests" / "database" / "contacts.sql"
+CONTACTS_MIGRATION = ROOT / "supabase" / "migrations" / "20261029235500_contacts.sql"
 
 AUTH_USER_A = "00000000-0000-0000-0000-0000000000a1"
 AUTH_USER_B = "00000000-0000-0000-0000-0000000000b2"
@@ -422,6 +424,10 @@ def selected_migrations(suite: str) -> list[Path]:
         if PRODUCTS_MIGRATION not in paths:
             raise RuntimeError("PRODUCTS_MIGRATION_MISSING")
         return [path for path in paths if path.name <= PRODUCTS_MIGRATION.name]
+    if suite == "contacts":
+        if CONTACTS_MIGRATION not in paths:
+            raise RuntimeError("CONTACTS_MIGRATION_MISSING")
+        return [path for path in paths if path.name <= CONTACTS_MIGRATION.name]
     raise RuntimeError("UNKNOWN_SUITE")
 
 
@@ -481,7 +487,7 @@ def print_success(suite: str, migrations: list[str], labels: list[str]) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Execute isolated PostgreSQL QA suites")
-    parser.add_argument("--suite", choices=("foundation", "inventory", "products"), default="foundation")
+    parser.add_argument("--suite", choices=("foundation", "inventory", "products", "contacts"), default="foundation")
     parser.add_argument("--stop", action="store_true", help="stop only this marked local cluster after the run")
     args = parser.parse_args()
     try:
@@ -492,15 +498,22 @@ def main() -> int:
         # marked cluster.  A default package cluster is never used as a fixture.
         drop_and_create_marked_database()
         bootstrap_roles_auth_and_users()
-        if args.suite == "products":
+        if args.suite in ("products", "contacts"):
             bootstrap_storage_contract()
         preflight_local_database()
         if args.suite == "inventory" and not INVENTORY_TEST.is_file():
             raise RuntimeError("INVENTORY_SUITE_SQL_MISSING")
         if args.suite == "products" and not PRODUCTS_TEST.is_file():
             raise RuntimeError("PRODUCTS_SUITE_SQL_MISSING")
+        if args.suite == "contacts" and not CONTACTS_TEST.is_file():
+            raise RuntimeError("CONTACTS_SUITE_SQL_MISSING")
         migrations = apply_migrations(selected_migrations(args.suite))
-        test_path = FOUNDATION_TEST if args.suite == "foundation" else INVENTORY_TEST if args.suite == "inventory" else PRODUCTS_TEST
+        test_path = (
+            FOUNDATION_TEST if args.suite == "foundation"
+            else INVENTORY_TEST if args.suite == "inventory"
+            else PRODUCTS_TEST if args.suite == "products"
+            else CONTACTS_TEST
+        )
         labels = run_sql_suite(test_path)
         print_success(args.suite, migrations, labels)
         if args.stop:
