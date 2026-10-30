@@ -7,6 +7,7 @@ from pathlib import Path
 
 import psycopg
 from supabase_connection import api_base, database_parameters
+from migration_history import apply_migration, verify_history
 
 ROOT = Path(__file__).resolve().parents[1]
 MIGRATIONS = ROOT / "supabase/migrations"
@@ -31,26 +32,16 @@ def main():
         reports = []
         with psycopg.connect(**parameters, autocommit=True) as connection:
             connection.execute("SELECT pg_advisory_lock(hashtext('vm_schema_migrations'))")
+            stage = "preflight"
+            verify_history(connection)
             for path in files:
                 version = path.stem
-                stage = "preflight"
-                registry = connection.execute("SELECT to_regclass('public.vm_schema_migrations') IS NOT NULL").fetchone()[0]
-                applied = registry and connection.execute("SELECT EXISTS(SELECT 1 FROM public.vm_schema_migrations WHERE version=%s)", (version,)).fetchone()[0]
                 digest = hashlib.sha256(path.read_bytes()).hexdigest()
-                if applied:
-                    reports.append({"version": version, "status": "already_applied", "source_sha256": digest})
-                    continue
-                if not registry:
-                    raise ValueError("FOUNDATION_MUST_BE_APPLIED_FIRST")
-                sql = path.read_text()
-                if not sql.lstrip().startswith("BEGIN;") or not sql.strip().endswith("COMMIT;"):
-                    raise ValueError("TRANSACTION_REQUIRED")
                 stage = "migration"
-                connection.execute(sql, prepare=False)
-                stage = "verification"
-                if not connection.execute("SELECT EXISTS(SELECT 1 FROM public.vm_schema_migrations WHERE version=%s)", (version,)).fetchone()[0]:
-                    raise ValueError("MIGRATION_REGISTRY_MISSING")
-                reports.append({"version": version, "status": "applied", "source_sha256": digest})
+                changed = apply_migration(connection, path)
+                reports.append({"version": version, "status": "applied" if changed else "already_applied", "source_sha256": digest})
+            stage = "verification"
+            verify_history(connection)
             tables = connection.execute("SELECT n.nspname||'.'||c.relname,c.relrowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN ('public','vm_private') AND c.relkind IN ('r','p') AND c.relname LIKE 'vm_%' ORDER BY 1").fetchall()
             if not all(enabled for _, enabled in tables):
                 raise ValueError("TABLE_WITHOUT_RLS")
