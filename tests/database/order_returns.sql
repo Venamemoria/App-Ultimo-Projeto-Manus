@@ -167,8 +167,8 @@ SELECT * FROM public.vm_record_order_return(
  '60000000-0000-0000-0000-000000000106'::uuid);
 SELECT pg_temp.assert_true(
  (SELECT line_count FROM qa_first_return)='1'
- AND (SELECT returned_quantity FROM qa_first_return)='0.50000000'
- AND (SELECT remaining_quantity FROM qa_first_return)='1.50000000'
+ AND (SELECT returned_quantity FROM qa_first_return)::numeric=0.50000000::numeric
+ AND (SELECT remaining_quantity FROM qa_first_return)::numeric=1.50000000::numeric
  AND (SELECT stock_quantity FROM public.vm_materials WHERE id=(SELECT material_id FROM qa_materials WHERE kind='consumed'))=8.50000000::numeric,
  'partial physical quantity restores exact stock and preserves remaining consumption');
 SELECT pg_temp.assert_true(
@@ -178,10 +178,10 @@ SELECT pg_temp.assert_true(
  AND (SELECT quantity_delta FROM public.vm_stock_movements WHERE order_id=(SELECT order_id FROM qa_orders WHERE kind='partial') AND movement_type='order_return')=0.50000000::numeric,
  'return event line and positive order_return movement are atomic');
 SELECT pg_temp.assert_true(
- (SELECT original_consumed_quantity FROM public.vm_order_returns_read WHERE order_id=(SELECT order_id FROM qa_orders WHERE kind='partial'))='2.00000000'
- AND (SELECT returned_quantity_total FROM public.vm_order_returns_read WHERE order_id=(SELECT order_id FROM qa_orders WHERE kind='partial'))='0.50000000'
- AND (SELECT remaining_quantity FROM public.vm_order_returns_read WHERE order_id=(SELECT order_id FROM qa_orders WHERE kind='partial'))='1.50000000'
- AND (SELECT stock_after FROM public.vm_order_returns_read WHERE order_id=(SELECT order_id FROM qa_orders WHERE kind='partial'))='8.50000000',
+ (SELECT original_consumed_quantity FROM public.vm_order_returns_read WHERE order_id=(SELECT order_id FROM qa_orders WHERE kind='partial'))::numeric=2.00000000::numeric
+ AND (SELECT returned_quantity_total FROM public.vm_order_returns_read WHERE order_id=(SELECT order_id FROM qa_orders WHERE kind='partial'))::numeric=0.50000000::numeric
+ AND (SELECT remaining_quantity FROM public.vm_order_returns_read WHERE order_id=(SELECT order_id FROM qa_orders WHERE kind='partial'))::numeric=1.50000000::numeric
+ AND (SELECT stock_after FROM public.vm_order_returns_read WHERE order_id=(SELECT order_id FROM qa_orders WHERE kind='partial'))::numeric=8.50000000::numeric,
  'member read view exposes textual original restored and remaining quantities');
 SELECT pg_temp.pass_test('partial actual return and textual read view');
 

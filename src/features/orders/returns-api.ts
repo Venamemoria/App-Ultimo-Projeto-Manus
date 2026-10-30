@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase, supabaseConfigError } from '../../lib/supabase';
 import { inventoryQueryKeys } from '../inventory/api';
-import { Decimal } from '../../lib/decimal';
+import { Decimal, STOCK_RESULT_SCALE } from '../../lib/decimal';
 import { decimalAtScale, isUuid } from './utils';
 import { ordersQueryKeys } from './api';
 
@@ -134,7 +134,7 @@ export function orderReturnRpcParams(input: RecordOrderReturnInput): Record<stri
     seen.add(line.material_id);
     return {
       material_id: line.material_id,
-      quantity: decimalAtScale(line.quantity, 8, true, 'Quantidade devolvida'),
+      quantity: decimalAtScale(line.quantity, STOCK_RESULT_SCALE, true, 'Quantidade devolvida'),
     };
   });
 
@@ -191,7 +191,7 @@ export function useRecordOrderReturnMutation(organizationId: string | null, orde
 export function decimalQuantity(value: string): Decimal {
   try {
     const decimal = new Decimal(value);
-    if (!decimal.isFinite() || decimal.decimalPlaces() > 8) throw new Error('invalid');
+    if (!decimal.isFinite() || decimal.decimalPlaces() > STOCK_RESULT_SCALE) throw new Error('invalid');
     return decimal;
   } catch {
     throw new Error('O histórico de devoluções retornou uma quantidade inválida.');

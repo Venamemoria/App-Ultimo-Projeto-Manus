@@ -24,7 +24,9 @@ import psycopg
 from psycopg import sql
 
 ROOT = Path(__file__).resolve().parents[1]
-PG_BIN = Path("/usr/lib/postgresql/16/bin")
+# The harness uses initdb/pg_ctl directly; psql is not required. Allow an
+# explicit local installation without changing the isolated socket/cluster.
+PG_BIN = Path(os.environ.get("VM_TEST_POSTGRES_BIN", "/usr/lib/postgresql/16/bin"))
 LOCAL_ROOT = ROOT / ".local" / "test-db"
 DATA_DIR = LOCAL_ROOT / "data"
 SOCKET_DIR = LOCAL_ROOT / "socket"
@@ -91,7 +93,7 @@ def pg_ctl(*args: str, stage: str) -> None:
 
 
 def require_paths() -> None:
-    for path in (PG_BIN / "initdb", PG_BIN / "pg_ctl", PG_BIN / "psql"):
+    for path in (PG_BIN / "initdb", PG_BIN / "pg_ctl"):
         if not path.exists():
             raise RuntimeError("POSTGRES16_BINARY_MISSING")
     if not FOUNDATION.exists():
@@ -471,7 +473,7 @@ def selected_migrations(suite: str) -> list[Path]:
         if QUOTE_ADMIN_LIST_MIGRATION not in paths:
             raise RuntimeError("QUOTE_ADMIN_LIST_MIGRATION_MISSING")
         return [path for path in paths if path.name <= QUOTE_ADMIN_LIST_MIGRATION.name]
-    if suite == "finance_summary":
+    if suite in ("finance_summary", "migration_history"):
         if FINANCE_MIGRATION not in paths:
             raise RuntimeError("FINANCE_MIGRATION_MISSING")
         return [path for path in paths if path.name <= FINANCE_MIGRATION.name]
@@ -494,10 +496,105 @@ def apply_migrations(paths: Iterable[Path]) -> list[str]:
     return applied
 
 
-def run_sql_suite(test_path: Path) -> list[str]:
-    if not test_path.is_file():
+def run_foundation_history_probe() -> list[str]:
+    """Bootstrap the real foundation against an empty marked local database."""
+    from migration_history import apply_initial_migration, verify_history
+
+    with connect(DB_NAME) as conn:
+        conn.autocommit = True
+        conn.execute("CREATE SCHEMA supabase_migrations")
+        conn.execute("CREATE TABLE supabase_migrations.schema_migrations(version text PRIMARY KEY)")
+        conn.execute("INSERT INTO supabase_migrations.schema_migrations VALUES('20260101000000')")
+        try:
+            apply_initial_migration(conn, FOUNDATION)
+        except ValueError as exc:
+            if str(exc) != "OFFICIAL_HISTORY_NOT_EMPTY":
+                raise
+        else:
+            raise RuntimeError("NONEMPTY_OFFICIAL_HISTORY_NOT_REJECTED")
+        if conn.execute("SELECT to_regclass('public.vm_schema_migrations') IS NOT NULL").fetchone()[0]:
+            raise RuntimeError("INITIAL_MIGRATION_DID_NOT_ROLL_BACK")
+        conn.execute("DELETE FROM supabase_migrations.schema_migrations")
+        apply_initial_migration(conn, FOUNDATION)
+        verify_history(conn)
+        row = conn.execute("SELECT version, name, statements IS NOT NULL FROM supabase_migrations.schema_migrations").fetchone()
+        if row != ("20261029203500", "foundation", True):
+            raise RuntimeError("FOUNDATION_HISTORY_INCORRECT")
+    return ["foundation refuses unrelated official history and rolls back", "foundation commits schema and both migration ledgers atomically"]
+
+
+def run_migration_history_probe() -> list[str]:
+    """Exercise history repair and atomic dual-ledger writes only locally."""
+    from migration_history import apply_migration, verify_history
+
+    source = (ROOT / "scripts" / "reconcile_migration_history.sql").read_text(encoding="utf-8")
+    labels: list[str] = []
+    with connect(DB_NAME) as conn:
+        conn.autocommit = True
+        conn.execute(source, prepare=False)
+        verify_history(conn)
+        rows = conn.execute("SELECT version, name, statements FROM supabase_migrations.schema_migrations ORDER BY version").fetchall()
+        if len(rows) != 10 or any(not name or statements is not None for _, name, statements in rows):
+            raise RuntimeError("HISTORY_REPAIR_CONTENT_INCORRECT")
+        if conn.execute("SELECT has_schema_privilege('anon','supabase_migrations','USAGE') OR has_schema_privilege('authenticated','supabase_migrations','USAGE')").fetchone()[0]:
+            raise RuntimeError("HISTORY_SCHEMA_PUBLICLY_EXPOSED")
+        labels.append("history-only repair records ten reviewed versions without exposing the ledger")
+        conn.execute(source, prepare=False)
+        if conn.execute("SELECT count(*) FROM supabase_migrations.schema_migrations").fetchone()[0] != 10:
+            raise RuntimeError("HISTORY_REPAIR_NOT_IDEMPOTENT")
+        labels.append("history repair is idempotent")
+
+        # Prove that a divergent history cannot be silently accepted.
+        conn.execute("DELETE FROM supabase_migrations.schema_migrations WHERE version='20261029203500'")
+        try:
+            verify_history(conn)
+        except ValueError as exc:
+            if str(exc) != "MIGRATION_HISTORIES_DIVERGE":
+                raise
+        else:
+            raise RuntimeError("DIVERGENT_HISTORY_NOT_REJECTED")
+        try:
+            conn.execute(source, prepare=False)
+        except psycopg.Error:
+            conn.execute("ROLLBACK")
+        else:
+            raise RuntimeError("PARTIAL_HISTORY_REPAIR_NOT_REJECTED")
+        conn.execute("INSERT INTO supabase_migrations.schema_migrations(version,name) VALUES('20261029203500','foundation')")
+        verify_history(conn)
+        labels.append("partial or conflicting histories fail closed")
+
+        success = LOCAL_ROOT / "20261030005900_qa_history.sql"
+        success.write_text("BEGIN;\nCREATE TABLE public.qa_history_write(id integer);\nINSERT INTO public.vm_schema_migrations(version,description) VALUES('20261030005900_qa_history','isolated QA');\nCOMMIT;\n", encoding="utf-8")
+        if not apply_migration(conn, success) or apply_migration(conn, success):
+            raise RuntimeError("DUAL_HISTORY_APPLY_NOT_IDEMPOTENT")
+        statements = conn.execute("SELECT statements FROM supabase_migrations.schema_migrations WHERE version='20261030005900'").fetchone()[0]
+        if not statements or not any("CREATE TABLE public.qa_history_write" in part for part in statements):
+            raise RuntimeError("DUAL_HISTORY_SOURCE_MISSING")
+        verify_history(conn)
+        labels.append("new migration commits its SQL and both ledger entries together")
+
+        failure = LOCAL_ROOT / "20261030006000_qa_rollback.sql"
+        failure.write_text("BEGIN;\nCREATE TABLE public.qa_history_rollback(id integer);\nCOMMIT;\n", encoding="utf-8")
+        try:
+            apply_migration(conn, failure)
+        except ValueError as exc:
+            if str(exc) != "MIGRATION_REGISTRY_MISSING":
+                raise
+        else:
+            raise RuntimeError("MISSING_CUSTOM_HISTORY_NOT_REJECTED")
+        if conn.execute("SELECT to_regclass('public.qa_history_rollback') IS NOT NULL").fetchone()[0]:
+            raise RuntimeError("MIGRATION_DDL_NOT_ROLLED_BACK")
+        verify_history(conn)
+        labels.append("failure rolls back schema and both histories atomically")
+    return labels
+
+
+def run_sql_suite(test_path: Path, extra_path: Path | None = None) -> list[str]:
+    if not test_path.is_file() or (extra_path is not None and not extra_path.is_file()):
         raise RuntimeError("SUITE_SQL_MISSING")
     source = test_path.read_text(encoding="utf-8")
+    if extra_path is not None:
+        source += "\n" + extra_path.read_text(encoding="utf-8")
     if "assert_true" not in source or "assert_raises" not in source:
         raise RuntimeError("ASSERTION_HELPERS_MISSING")
     with connect(DB_NAME) as conn:
@@ -704,9 +801,12 @@ def print_success(suite: str, migrations: list[str], labels: list[str]) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Execute isolated PostgreSQL QA suites")
-    parser.add_argument("--suite", choices=("foundation", "inventory", "products", "contacts", "orders", "order_returns", "public_sales", "finance_summary"), default="foundation")
+    parser.add_argument("--suite", choices=("foundation", "foundation_history", "inventory", "products", "contacts", "orders", "order_returns", "public_sales", "finance_summary", "migration_history", "fractional_precision"), default="foundation")
+    parser.add_argument("--latest", action="store_true", help="apply all migrations before the selected functional suite")
     parser.add_argument("--stop", action="store_true", help="stop only this marked local cluster after the run")
     args = parser.parse_args()
+    if args.suite == "fractional_precision":
+        args.latest = True
     try:
         require_paths()
         init_cluster_if_needed()
@@ -715,10 +815,10 @@ def main() -> int:
         # marked cluster.  A default package cluster is never used as a fixture.
         drop_and_create_marked_database()
         bootstrap_roles_auth_and_users()
-        if args.suite in ("products", "contacts", "orders", "order_returns", "public_sales", "finance_summary"):
+        if args.latest or args.suite in ("products", "contacts", "orders", "order_returns", "public_sales", "finance_summary", "migration_history"):
             bootstrap_storage_contract()
         preflight_local_database()
-        if args.suite in ("public_sales", "finance_summary"):
+        if args.latest or args.suite in ("public_sales", "finance_summary", "migration_history"):
             bootstrap_realtime_contract()
         if args.suite == "inventory" and not INVENTORY_TEST.is_file():
             raise RuntimeError("INVENTORY_SUITE_SQL_MISSING")
@@ -734,19 +834,29 @@ def main() -> int:
             raise RuntimeError("PUBLIC_SALES_SUITE_SQL_MISSING")
         if args.suite == "finance_summary" and not FINANCE_TEST.is_file():
             raise RuntimeError("FINANCE_SUITE_SQL_MISSING")
-        migrations = apply_migrations(selected_migrations(args.suite))
+        if args.latest and args.suite in ("foundation_history", "migration_history"):
+            raise RuntimeError("HISTORY_SUITES_REQUIRE_BASELINE")
+        if args.suite == "foundation_history":
+            foundation_labels = run_foundation_history_probe()
+            migrations = [FOUNDATION.stem]
+        else:
+            foundation_labels = []
+            paths = sorted(MIGRATION_DIR.glob("*.sql")) if args.latest else selected_migrations(args.suite)
+            migrations = apply_migrations(paths)
         test_path = (
-            FOUNDATION_TEST if args.suite == "foundation"
+            FOUNDATION_TEST if args.suite in ("foundation", "foundation_history")
             else INVENTORY_TEST if args.suite == "inventory"
             else PRODUCTS_TEST if args.suite == "products"
             else CONTACTS_TEST if args.suite == "contacts"
-            else ORDERS_TEST if args.suite == "orders"
+            else ORDERS_TEST if args.suite in ("orders", "fractional_precision")
             else ORDER_RETURNS_TEST if args.suite == "order_returns"
             else FINANCE_TEST if args.suite == "finance_summary"
             else PUBLIC_SALES_TEST
         )
-        labels = run_sql_suite(test_path)
-        if args.suite == "orders":
+        extra = ROOT / "tests" / "database" / "fractional_precision.sql" if args.suite == "fractional_precision" else None
+        labels = run_migration_history_probe() if args.suite == "migration_history" else run_sql_suite(test_path, extra)
+        labels.extend(foundation_labels)
+        if args.suite in ("orders", "fractional_precision"):
             labels.extend(run_orders_concurrency_probe())
         if args.suite == "public_sales":
             labels.extend(run_public_sales_concurrency_probe())

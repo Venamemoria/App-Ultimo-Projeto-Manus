@@ -9,6 +9,7 @@ from pathlib import Path
 
 import psycopg
 from supabase_connection import database_parameters, api_base
+from migration_history import apply_initial_migration, verify_history
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = "20261029203500_foundation"
@@ -23,9 +24,11 @@ def main():
         parameters = database_parameters(strip_password_delimiters=True)
         parameters.update(host=config["poolerHost"], port=config["poolerPort"], user="postgres." + config["projectRef"], prepare_threshold=None)
         with psycopg.connect(**parameters, autocommit=True) as connection:
+            connection.execute("SELECT pg_advisory_lock(hashtext('vm_schema_migrations'))")
             stage = "preflight"
             exists = connection.execute("SELECT to_regclass('public.vm_schema_migrations') IS NOT NULL").fetchone()[0]
             if exists:
+                verify_history(connection)
                 applied = connection.execute("SELECT EXISTS(SELECT 1 FROM public.vm_schema_migrations WHERE version=%s)", (VERSION,)).fetchone()[0]
                 if not applied:
                     raise ValueError("EXISTING_FOUNDATION_REQUIRES_REVIEW")
@@ -35,11 +38,9 @@ def main():
                 if tables:
                     raise ValueError("EXISTING_TABLES_REQUIRES_REVIEW")
                 stage = "migration"
-                sql = (ROOT / "supabase/migrations" / (VERSION + ".sql")).read_text()
-                if not sql.startswith("BEGIN;") or not sql.strip().endswith("COMMIT;"):
-                    raise ValueError("MIGRATION_TRANSACTION_REQUIRED")
-                connection.execute(sql, prepare=False)
+                apply_initial_migration(connection, ROOT / "supabase/migrations" / (VERSION + ".sql"))
                 print(json.dumps({"migration": VERSION, "status": "applied"}))
+            verify_history(connection)
             stage = "verification"
             tables = connection.execute("SELECT tablename, rowsecurity FROM pg_tables WHERE schemaname='public' AND tablename LIKE 'vm_%' ORDER BY 1").fetchall()
             policies = connection.execute("SELECT count(*) FROM pg_policies WHERE schemaname='public' AND tablename LIKE 'vm_%'").fetchone()[0]

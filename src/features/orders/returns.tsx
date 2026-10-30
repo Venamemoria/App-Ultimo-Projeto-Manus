@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { CheckCircle2, History, RotateCcw, ShieldCheck } from 'lucide-react';
 import { Alert, Button, Field, Input, Loading, Modal, Textarea } from '../../components/ui';
 import type { MembershipRole } from '../../lib/types';
-import { Decimal } from '../../lib/decimal';
+import { Decimal, formatDecimal, STOCK_RESULT_SCALE } from '../../lib/decimal';
 import { formatDate } from '../../lib/format';
 import { decimalAtScale, isUuid, newIdempotencyKey } from './utils';
 import type { OrderConsumptionDto, OrderDto, OrderItemDto } from './types';
@@ -131,10 +131,10 @@ export function aggregateOrderReturnMaterials(
     .sort((left, right) => left.materialId.localeCompare(right.materialId));
 }
 
-function quantityEight(value: Decimal | string | null | undefined): string {
+function quantityDisplay(value: Decimal | string | null | undefined): string {
   if (value === null || value === undefined || value === '') return '—';
   try {
-    return (value instanceof Decimal ? value : decimalQuantity(value)).toFixed(8);
+    return formatDecimal(value instanceof Decimal ? value : decimalQuantity(value), STOCK_RESULT_SCALE);
   } catch {
     return '—';
   }
@@ -204,9 +204,9 @@ export function OrderReturnsSection({ organizationId, order, items, consumptions
       const rawQuantity = quantities[summary.materialId]?.trim() ?? '';
       if (!rawQuantity) continue;
       try {
-        const quantity = decimalAtScale(rawQuantity, 8, true, `Quantidade de ${summary.materialName}`);
+        const quantity = decimalAtScale(rawQuantity, STOCK_RESULT_SCALE, true, `Quantidade de ${summary.materialName}`);
         if (new Decimal(quantity).gt(summary.remainingQuantity)) {
-          nextLineErrors[summary.materialId] = `Informe no máximo ${quantityEight(summary.remainingQuantity)} ${summary.unit}.`;
+          nextLineErrors[summary.materialId] = `Informe no máximo ${quantityDisplay(summary.remainingQuantity)} ${summary.unit}.`;
           continue;
         }
         selected.push({ material_id: summary.materialId, quantity });
@@ -292,10 +292,10 @@ export function OrderReturnsSection({ organizationId, order, items, consumptions
                 <ShieldCheck size={18} aria-label="Linha de estoque auditável" />
               </div>
               <div className="detail-grid order-return-metrics">
-                <div><span>Consumo original</span><strong>{quantityEight(summary.originalQuantity)} {summary.unit}</strong></div>
-                <div><span>Total devolvido neste material</span><strong>{quantityEight(summary.returnedQuantityTotal)} {summary.unit}</strong></div>
-                <div><span>Restante deste material</span><strong>{quantityEight(summary.remainingQuantity)} {summary.unit}</strong></div>
-                {summary.currentStockQuantity !== null ? <div><span>Saldo atual</span><strong>{quantityEight(summary.currentStockQuantity)} {summary.unit}</strong></div> : null}
+                <div><span>Consumo original</span><strong>{quantityDisplay(summary.originalQuantity)} {summary.unit}</strong></div>
+                <div><span>Total devolvido neste material</span><strong>{quantityDisplay(summary.returnedQuantityTotal)} {summary.unit}</strong></div>
+                <div><span>Restante deste material</span><strong>{quantityDisplay(summary.remainingQuantity)} {summary.unit}</strong></div>
+                {summary.currentStockQuantity !== null ? <div><span>Saldo atual</span><strong>{quantityDisplay(summary.currentStockQuantity)} {summary.unit}</strong></div> : null}
               </div>
               {summary.history.length ? (
                 <div className="order-return-history">
@@ -307,11 +307,11 @@ export function OrderReturnsSection({ organizationId, order, items, consumptions
                         <span>{row.unit}</span>
                       </div>
                       <div className="order-return-history-values">
-                        <div><span>Linha devolvida</span><strong>{quantityEight(row.returned_quantity)} {row.unit}</strong></div>
-                        <div><span>Total devolvido</span><strong>{quantityEight(summary.returnedQuantityTotal)} {summary.unit}</strong></div>
-                        <div><span>Restante</span><strong>{quantityEight(summary.remainingQuantity)} {summary.unit}</strong></div>
-                        <div><span>Saldo após retorno</span><strong>{quantityEight(row.stock_after)} {row.unit}</strong></div>
-                        <div><span>Saldo atual</span><strong>{quantityEight(row.current_stock_quantity)} {row.unit}</strong></div>
+                        <div><span>Linha devolvida</span><strong>{quantityDisplay(row.returned_quantity)} {row.unit}</strong></div>
+                        <div><span>Total devolvido</span><strong>{quantityDisplay(summary.returnedQuantityTotal)} {summary.unit}</strong></div>
+                        <div><span>Restante</span><strong>{quantityDisplay(summary.remainingQuantity)} {summary.unit}</strong></div>
+                        <div><span>Saldo após retorno</span><strong>{quantityDisplay(row.stock_after)} {row.unit}</strong></div>
+                        <div><span>Saldo atual</span><strong>{quantityDisplay(row.current_stock_quantity)} {row.unit}</strong></div>
                       </div>
                       <small>{row.reason}</small>
                     </div>
@@ -337,7 +337,7 @@ export function OrderReturnsSection({ organizationId, order, items, consumptions
                 <Field
                   key={summary.materialId}
                   label={`${summary.materialName} · ${summary.unit}`}
-                  hint={`Consumo original ${quantityEight(summary.originalQuantity)} ${summary.unit}; restante disponível ${quantityEight(summary.remainingQuantity)} ${summary.unit}. Deixe vazio se não houver devolução.`}
+                  hint={`Consumo original ${quantityDisplay(summary.originalQuantity)} ${summary.unit}; restante disponível ${quantityDisplay(summary.remainingQuantity)} ${summary.unit}. Deixe vazio se não houver devolução.`}
                   error={lineErrors[summary.materialId]}
                 >
                   <Input
