@@ -18,7 +18,8 @@ describe('decimais sem float de estoque', () => {
     expect(decimalString(new Decimal('0.125').times('3'))).toBe(new Decimal('0.125').times('3').toFixed());
   });
   it('preview divide e quantiza como custo unitário PostgreSQL', () => {
-    expect(unitCostPreview('10,00000001', '3')).toBe(new Decimal('10.00000001').div('3').toDecimalPlaces(8).toFixed());
+    expect(unitCostPreview('10,00000001', '3')).toBe(new Decimal('10.00000001').div('3').toDecimalPlaces(24).toFixed());
+    expect(unitCostPreview('1', '3')).toBe('0.333333333333333333333333');
     expect(unitCostPreview('10', '0')).toBeNull();
   });
   it('formata moeda e mantém a data civil independente de timezone', () => {

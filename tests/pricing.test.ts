@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { highestQualifiedWholesalePrice, resolveProductPrice, resolvePromoPrice } from '../src/features/products/pricing';
+import { compositionCost, highestQualifiedWholesalePrice, resolveProductPrice, resolvePromoPrice } from '../src/features/products/pricing';
 
 describe('precificação de produtos', () => {
+  it('preserva a composição com custo unitário de 24 casas', () => {
+    const components = [{ material_id: 'm1', unit: 'un', quantity: '0.00000001' }];
+    expect(compositionCost(components, new Map([['m1', '0.333333333333333333333333']]))).toBe('0.00000000333333333333333333333333');
+  });
   it('usa a promoção somente quando ela não supera o preço normal', () => {
     expect(resolvePromoPrice('19,99999999', '17,12500000')).toBe('17.125');
     expect(() => resolvePromoPrice('10', '10,01')).toThrow('não pode ser maior');
