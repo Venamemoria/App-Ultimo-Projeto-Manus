@@ -14,6 +14,7 @@
     { "path": "/producao", "title": "Produção" },
     { "path": "/agenda", "title": "Agenda" },
     { "path": "/orcamentos", "title": "Orçamentos" },
+    { "path": "/financeiro", "title": "Financeiro" },
     { "path": "/orcamento/:id", "title": "Orçamento público" },
     { "path": "/rastreio/:id", "title": "Rastreio público" }
   ]

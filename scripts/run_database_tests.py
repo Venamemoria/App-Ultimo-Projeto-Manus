@@ -52,6 +52,8 @@ ORDER_RETURNS_MIGRATION = ROOT / "supabase" / "migrations" / "20261030002200_ord
 PUBLIC_SALES_TEST = ROOT / "tests" / "database" / "public_sales.sql"
 PUBLIC_SALES_MIGRATION = ROOT / "supabase" / "migrations" / "20261030003000_public_sales.sql"
 QUOTE_ADMIN_LIST_MIGRATION = ROOT / "supabase" / "migrations" / "20261030004000_tracking_minimal_acl.sql"
+FINANCE_TEST = ROOT / "tests" / "database" / "finance_summary.sql"
+FINANCE_MIGRATION = ROOT / "supabase" / "migrations" / "20261030005000_finance_summary.sql"
 REALTIME_CONTRACT = ROOT / "tests" / "database" / "realtime_contract.sql"
 
 AUTH_USER_A = "00000000-0000-0000-0000-0000000000a1"
@@ -469,6 +471,10 @@ def selected_migrations(suite: str) -> list[Path]:
         if QUOTE_ADMIN_LIST_MIGRATION not in paths:
             raise RuntimeError("QUOTE_ADMIN_LIST_MIGRATION_MISSING")
         return [path for path in paths if path.name <= QUOTE_ADMIN_LIST_MIGRATION.name]
+    if suite == "finance_summary":
+        if FINANCE_MIGRATION not in paths:
+            raise RuntimeError("FINANCE_MIGRATION_MISSING")
+        return [path for path in paths if path.name <= FINANCE_MIGRATION.name]
     raise RuntimeError("UNKNOWN_SUITE")
 
 
@@ -698,7 +704,7 @@ def print_success(suite: str, migrations: list[str], labels: list[str]) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Execute isolated PostgreSQL QA suites")
-    parser.add_argument("--suite", choices=("foundation", "inventory", "products", "contacts", "orders", "order_returns", "public_sales"), default="foundation")
+    parser.add_argument("--suite", choices=("foundation", "inventory", "products", "contacts", "orders", "order_returns", "public_sales", "finance_summary"), default="foundation")
     parser.add_argument("--stop", action="store_true", help="stop only this marked local cluster after the run")
     args = parser.parse_args()
     try:
@@ -709,10 +715,10 @@ def main() -> int:
         # marked cluster.  A default package cluster is never used as a fixture.
         drop_and_create_marked_database()
         bootstrap_roles_auth_and_users()
-        if args.suite in ("products", "contacts", "orders", "order_returns", "public_sales"):
+        if args.suite in ("products", "contacts", "orders", "order_returns", "public_sales", "finance_summary"):
             bootstrap_storage_contract()
         preflight_local_database()
-        if args.suite == "public_sales":
+        if args.suite in ("public_sales", "finance_summary"):
             bootstrap_realtime_contract()
         if args.suite == "inventory" and not INVENTORY_TEST.is_file():
             raise RuntimeError("INVENTORY_SUITE_SQL_MISSING")
@@ -726,6 +732,8 @@ def main() -> int:
             raise RuntimeError("ORDER_RETURNS_SUITE_SQL_MISSING")
         if args.suite == "public_sales" and not PUBLIC_SALES_TEST.is_file():
             raise RuntimeError("PUBLIC_SALES_SUITE_SQL_MISSING")
+        if args.suite == "finance_summary" and not FINANCE_TEST.is_file():
+            raise RuntimeError("FINANCE_SUITE_SQL_MISSING")
         migrations = apply_migrations(selected_migrations(args.suite))
         test_path = (
             FOUNDATION_TEST if args.suite == "foundation"
@@ -734,6 +742,7 @@ def main() -> int:
             else CONTACTS_TEST if args.suite == "contacts"
             else ORDERS_TEST if args.suite == "orders"
             else ORDER_RETURNS_TEST if args.suite == "order_returns"
+            else FINANCE_TEST if args.suite == "finance_summary"
             else PUBLIC_SALES_TEST
         )
         labels = run_sql_suite(test_path)

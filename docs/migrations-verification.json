@@ -1,49 +1,9 @@
 {
   "migrations": [
     {
-      "version": "20261029203500_foundation",
-      "status": "already_applied",
-      "source_sha256": "ed3b52cc2681a11f2884933f20ce09f61ada0e291ef9ce7927aa9dc2b9b1b0fd"
-    },
-    {
-      "version": "20261029221500_inventory",
-      "status": "already_applied",
-      "source_sha256": "5b7a6631f41c84b57107080da939170b33ef3eebae4c44b9ba61d063beebf7f7"
-    },
-    {
-      "version": "20261029233000_products",
-      "status": "already_applied",
-      "source_sha256": "881553761c72e121a83f64a85596563f2d8b44bd7861058613fc70ebf6c5f66f"
-    },
-    {
-      "version": "20261029235500_contacts",
-      "status": "already_applied",
-      "source_sha256": "edeeff7e80009e9f0fe922dc08368670848483d0db0cca36804544e2e48b2d60"
-    },
-    {
-      "version": "20261030002000_orders",
-      "status": "already_applied",
-      "source_sha256": "d6fa4d2ba5948de5debbc53ab888ef86c94fdcfa0312b6abd94fc7cef8865dcb"
-    },
-    {
-      "version": "20261030002200_order_returns",
-      "status": "already_applied",
-      "source_sha256": "b1401fac507aa067d3cd4ea2d511a25b0add6f98ec1fe217c523930e17224bab"
-    },
-    {
-      "version": "20261030003000_public_sales",
-      "status": "already_applied",
-      "source_sha256": "5733ed8ddc402576edefd93c95812745ae55b913d0c598463db68431f0135e8b"
-    },
-    {
-      "version": "20261030003500_quote_admin_list",
-      "status": "already_applied",
-      "source_sha256": "75df17facf5203030a4c7cfb45a1e1cc5a8c02a22ca2a8d91bc4d9ac359064a3"
-    },
-    {
-      "version": "20261030004000_tracking_minimal_acl",
-      "status": "already_applied",
-      "source_sha256": "b4f4261e1efc75627a964c441b53c344ad7616ec424d1928a5649d18a173ba92"
+      "version": "20261030005000_finance_summary",
+      "status": "applied",
+      "source_sha256": "e381ecf64b5d090a85a5047e3ee6e2f12d6149b84a2ebf2a73168d21c197b782"
     }
   ],
   "verification": "passed",

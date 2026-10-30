@@ -19,6 +19,7 @@ const CalendarPage = lazy(() => import('../features/orders/calendar').then((modu
 const QuotesPage = lazy(() => import('../features/publicSales/pages').then((module) => ({ default: module.QuotesPage })));
 const PublicQuotePage = lazy(() => import('../features/publicSales/pages').then((module) => ({ default: module.PublicQuotePage })));
 const PublicTrackingPage = lazy(() => import('../features/publicSales/pages').then((module) => ({ default: module.PublicTrackingPage })));
+const FinancePage = lazy(() => import('../features/finance/FinancePage').then((module) => ({ default: module.FinancePage })));
 
 function ProtectedRoute() {
   const { loading, session } = useSession();
@@ -50,6 +51,7 @@ export default function App() {
             <Route path="producao" element={<ProductionPage />} />
             <Route path="agenda" element={<CalendarPage />} />
             <Route path="orcamentos" element={<QuotesPage />} />
+            <Route path="financeiro" element={<FinancePage />} />
           </Route>
         </Route>
         <Route path="*" element={<Navigate replace to="/" />} />

@@ -3,7 +3,7 @@ import { getSafeNextPath } from '../src/lib/supabase';
 
 describe('retorno de navegação após login', () => {
   it('mantém apenas as páginas internas implementadas', () => {
-    for (const path of ['/conta', '/estoque', '/compras', '/produtos', '/clientes', '/fornecedores', '/pedidos', '/producao', '/agenda'] as const) expect(getSafeNextPath(path)).toBe(path);
+    for (const path of ['/conta', '/estoque', '/compras', '/produtos', '/clientes', '/fornecedores', '/pedidos', '/producao', '/agenda', '/orcamentos', '/financeiro'] as const) expect(getSafeNextPath(path)).toBe(path);
     expect(getSafeNextPath('/')).toBe('/');
   });
   it('nega redirecionamento externo, relativo ou não implementado', () => {

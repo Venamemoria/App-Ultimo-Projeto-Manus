@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { CalendarDays, CircleUserRound, ClipboardList, Factory, LayoutDashboard, LogOut, Menu, PackageSearch, PackagePlus, ReceiptText, UsersRound, X, FileText } from 'lucide-react';
+import { CalendarDays, CircleDollarSign, CircleUserRound, ClipboardList, Factory, LayoutDashboard, LogOut, Menu, PackageSearch, PackagePlus, ReceiptText, UsersRound, X, FileText } from 'lucide-react';
 import { Alert, Button } from '../components/ui';
 import { initials } from '../lib/format';
 import { useSession } from './AuthProvider';
@@ -63,6 +63,7 @@ export function AppLayout() {
           <NavLink className={navClass} to="/producao"><Factory size={18} aria-hidden="true" /> <span>Produção</span></NavLink>
           <NavLink className={navClass} to="/agenda"><CalendarDays size={18} aria-hidden="true" /> <span>Agenda</span></NavLink>
           {['owner', 'admin', 'finance'].includes(currentMembershipRole ?? '') ? <NavLink className={navClass} to="/orcamentos"><FileText size={18} aria-hidden="true" /> <span>Orçamentos</span></NavLink> : null}
+          {['owner', 'admin', 'finance'].includes(currentMembershipRole ?? '') ? <><div className="context-label">Financeiro</div><NavLink className={navClass} to="/financeiro"><CircleDollarSign size={18} aria-hidden="true" /> <span>Resumo do caixa</span></NavLink></> : null}
           <NavLink className={navClass} to="/conta"><CircleUserRound size={18} aria-hidden="true" /> <span>Conta</span></NavLink>
         </nav>
         <div className="sidebar-footer">
