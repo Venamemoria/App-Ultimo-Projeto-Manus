@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { AlertTriangle, Archive, Download, PackagePlus, Pencil, Plus, Search, SlidersHorizontal, Wrench } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Alert, Button, EmptyState, Field, Input, Loading, Modal, PageHeader, Select, StatCard, Textarea } from '../../components/ui';
-import { Decimal, decimalString, formatDecimal, parseDecimalInput, unitCostPreview } from '../../lib/decimal';
+import { Decimal, decimalString, formatDecimal, parseDecimalInput, STOCK_RESULT_SCALE, unitCostPreview } from '../../lib/decimal';
 import { formatDate } from '../../lib/format';
 import { useSession } from '../../app/AuthProvider';
 import {
@@ -24,7 +24,7 @@ const money = (value: string | Decimal | null | undefined) => {
   return formatted === '—' ? formatted : `R$ ${formatted}`;
 };
 
-const quantity = (value: string | null | undefined) => formatDecimal(value, 8);
+const quantity = (value: string | null | undefined) => formatDecimal(value, STOCK_RESULT_SCALE);
 
 function stockValue(materials: MaterialDto[]): Decimal | null {
   try {

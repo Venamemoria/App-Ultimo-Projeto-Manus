@@ -1,4 +1,4 @@
-import { Decimal, decimalString, parseDecimalInput } from '../../lib/decimal';
+import { Decimal, decimalString, parseDecimalInput, STOCK_RESULT_SCALE } from '../../lib/decimal';
 import type { ProductDto, ProductEditSnapshot, VariantSnapshot, WholesaleTier } from '../products/types';
 import type { OrderDimensions } from './types';
 import { roundedMoney } from './utils';
@@ -66,10 +66,10 @@ function highestTier(quantity: Decimal, tiers: WholesaleTier[]): WholesaleTier |
   return chosen;
 }
 
-function checkedEightPlaces(value: Decimal, label: string, positive = false): string {
+function checkedQuantity(value: Decimal, label: string, scale: number, positive = false): string {
   if (positive && !value.gt(0)) throw new Error(`${label} deve ser maior que zero.`);
-  if (value.decimalPlaces() > 8 || value.abs().gt(new Decimal('999999999999.99999999'))) throw new Error(`${label} excede a precisão de 8 casas.`);
-  return decimalString(value);
+  if (value.decimalPlaces() > scale || value.abs().gt(new Decimal('999999999999.99999999'))) throw new Error(`${label} excede a precisão de ${scale} casas.`);
+  return value.toFixed();
 }
 
 export function previewProductPricing(input: PricingPreviewInput): PricingPreview {
@@ -82,10 +82,10 @@ export function previewProductPricing(input: PricingPreviewInput): PricingPrevie
     const width = decimal(input.dimensions.width_cm, 'Largura', true);
     const height = decimal(input.dimensions.height_cm, 'Altura', true);
     factor = width.times(height).times(new Decimal('0.0001'));
-    checkedEightPlaces(factor, 'Fator de área', true);
+    checkedQuantity(factor, 'Fator de área', STOCK_RESULT_SCALE, true);
   }
   const billedQuantity = quantity.times(factor);
-  const billedQuantityText = checkedEightPlaces(billedQuantity, 'Quantidade cobrável', true);
+  const billedQuantityText = checkedQuantity(billedQuantity, 'Quantidade cobrável', STOCK_RESULT_SCALE, true);
   const minimum = decimal(variant?.minimum_quantity || version.minimum_quantity, 'Quantidade mínima', true);
   if (billedQuantity.lt(minimum)) throw new Error('A quantidade cobrável está abaixo do mínimo vigente do catálogo.');
 
@@ -112,13 +112,13 @@ export function previewProductPricing(input: PricingPreviewInput): PricingPrevie
   }
 
   const lineAmountRaw = billedQuantity.times(unitPrice);
-  if (lineAmountRaw.decimalPlaces() > 16 || lineAmountRaw.gt(new Decimal('999999999999999999999999.9999999999999999'))) {
+  if (lineAmountRaw.decimalPlaces() > STOCK_RESULT_SCALE || lineAmountRaw.gt(new Decimal('999999999999999999999999.9999999999999999'))) {
     throw new Error('O valor bruto da linha excede a precisão permitida.');
   }
   return {
-    unitPrice: checkedEightPlaces(unitPrice, 'Preço unitário'),
+    unitPrice: checkedQuantity(unitPrice, 'Preço unitário', 8),
     billedQuantity: billedQuantityText,
-    dimensionsFactor: checkedEightPlaces(factor, 'Fator de dimensão', true),
+    dimensionsFactor: checkedQuantity(factor, 'Fator de dimensão', STOCK_RESULT_SCALE, true),
     lineAmountRaw: lineAmountRaw.toFixed(),
     lineAmount: roundedMoney(lineAmountRaw),
     minimumQuantity: decimalString(minimum),

@@ -1,6 +1,8 @@
 import Decimal from 'decimal.js';
 
-Decimal.set({ precision: 60, rounding: Decimal.ROUND_HALF_UP });
+// Exact intermediate products can contain 24 integer and 44 fractional digits.
+Decimal.set({ precision: 96, rounding: Decimal.ROUND_HALF_UP });
+export const STOCK_RESULT_SCALE = 36;
 export const QUANTITY_MAX = new Decimal('999999999999.99999999');
 
 export function parseDecimalInput(value: string, options: { scale?: number; allowNegative?: boolean; positive?: boolean } = {}): Decimal {

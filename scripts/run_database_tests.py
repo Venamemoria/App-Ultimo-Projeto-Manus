@@ -589,10 +589,12 @@ def run_migration_history_probe() -> list[str]:
     return labels
 
 
-def run_sql_suite(test_path: Path) -> list[str]:
-    if not test_path.is_file():
+def run_sql_suite(test_path: Path, extra_path: Path | None = None) -> list[str]:
+    if not test_path.is_file() or (extra_path is not None and not extra_path.is_file()):
         raise RuntimeError("SUITE_SQL_MISSING")
     source = test_path.read_text(encoding="utf-8")
+    if extra_path is not None:
+        source += "\n" + extra_path.read_text(encoding="utf-8")
     if "assert_true" not in source or "assert_raises" not in source:
         raise RuntimeError("ASSERTION_HELPERS_MISSING")
     with connect(DB_NAME) as conn:
@@ -799,9 +801,12 @@ def print_success(suite: str, migrations: list[str], labels: list[str]) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Execute isolated PostgreSQL QA suites")
-    parser.add_argument("--suite", choices=("foundation", "foundation_history", "inventory", "products", "contacts", "orders", "order_returns", "public_sales", "finance_summary", "migration_history"), default="foundation")
+    parser.add_argument("--suite", choices=("foundation", "foundation_history", "inventory", "products", "contacts", "orders", "order_returns", "public_sales", "finance_summary", "migration_history", "fractional_precision"), default="foundation")
+    parser.add_argument("--latest", action="store_true", help="apply all migrations before the selected functional suite")
     parser.add_argument("--stop", action="store_true", help="stop only this marked local cluster after the run")
     args = parser.parse_args()
+    if args.suite == "fractional_precision":
+        args.latest = True
     try:
         require_paths()
         init_cluster_if_needed()
@@ -810,10 +815,10 @@ def main() -> int:
         # marked cluster.  A default package cluster is never used as a fixture.
         drop_and_create_marked_database()
         bootstrap_roles_auth_and_users()
-        if args.suite in ("products", "contacts", "orders", "order_returns", "public_sales", "finance_summary", "migration_history"):
+        if args.latest or args.suite in ("products", "contacts", "orders", "order_returns", "public_sales", "finance_summary", "migration_history"):
             bootstrap_storage_contract()
         preflight_local_database()
-        if args.suite in ("public_sales", "finance_summary", "migration_history"):
+        if args.latest or args.suite in ("public_sales", "finance_summary", "migration_history"):
             bootstrap_realtime_contract()
         if args.suite == "inventory" and not INVENTORY_TEST.is_file():
             raise RuntimeError("INVENTORY_SUITE_SQL_MISSING")
@@ -829,25 +834,29 @@ def main() -> int:
             raise RuntimeError("PUBLIC_SALES_SUITE_SQL_MISSING")
         if args.suite == "finance_summary" and not FINANCE_TEST.is_file():
             raise RuntimeError("FINANCE_SUITE_SQL_MISSING")
+        if args.latest and args.suite in ("foundation_history", "migration_history"):
+            raise RuntimeError("HISTORY_SUITES_REQUIRE_BASELINE")
         if args.suite == "foundation_history":
             foundation_labels = run_foundation_history_probe()
             migrations = [FOUNDATION.stem]
         else:
             foundation_labels = []
-            migrations = apply_migrations(selected_migrations(args.suite))
+            paths = sorted(MIGRATION_DIR.glob("*.sql")) if args.latest else selected_migrations(args.suite)
+            migrations = apply_migrations(paths)
         test_path = (
             FOUNDATION_TEST if args.suite in ("foundation", "foundation_history")
             else INVENTORY_TEST if args.suite == "inventory"
             else PRODUCTS_TEST if args.suite == "products"
             else CONTACTS_TEST if args.suite == "contacts"
-            else ORDERS_TEST if args.suite == "orders"
+            else ORDERS_TEST if args.suite in ("orders", "fractional_precision")
             else ORDER_RETURNS_TEST if args.suite == "order_returns"
             else FINANCE_TEST if args.suite == "finance_summary"
             else PUBLIC_SALES_TEST
         )
-        labels = run_migration_history_probe() if args.suite == "migration_history" else run_sql_suite(test_path)
+        extra = ROOT / "tests" / "database" / "fractional_precision.sql" if args.suite == "fractional_precision" else None
+        labels = run_migration_history_probe() if args.suite == "migration_history" else run_sql_suite(test_path, extra)
         labels.extend(foundation_labels)
-        if args.suite == "orders":
+        if args.suite in ("orders", "fractional_precision"):
             labels.extend(run_orders_concurrency_probe())
         if args.suite == "public_sales":
             labels.extend(run_public_sales_concurrency_probe())

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { previewProductPricing } from '../src/features/orders/pricingPreview';
+import { decimalQuantity, orderReturnRpcParams } from '../src/features/orders/returns-api';
+import { Decimal, formatDecimal, STOCK_RESULT_SCALE } from '../src/lib/decimal';
 import { canTransition } from '../src/features/orders/types';
 import { isIsoDate, ordersCsv, shiftMonth } from '../src/features/orders/utils';
 import type { ProductDto, ProductEditSnapshot } from '../src/features/products/types';
@@ -24,6 +26,26 @@ describe('preview puro de pedidos', () => {
     const preview = previewProductPricing({ product: areaProduct, snapshot: areaSnapshot, variantId: null, quantity: '1', dimensions: { width_cm: '100', height_cm: '100' }, override: false, overridePrice: '' });
     expect(preview.dimensionsFactor).toBe('1');
     expect(preview.billedQuantity).toBe('1');
+  });
+
+  it('preserva os resultados fracionários de área, faturamento e preço sem truncar', () => {
+    const areaProduct = { ...product, billing_unit: 'm2' as const, pricing_mode: 'm2' as const };
+    const areaSnapshot = { ...snapshot, product: areaProduct, version: { ...snapshot.version, billing_unit: 'm2' as const, pricing_mode: 'm2' as const } };
+    const preview = previewProductPricing({ product: areaProduct, snapshot: areaSnapshot, variantId: null, quantity: '1.00000001', dimensions: { width_cm: '100.00000001', height_cm: '100.00000001' }, override: false, overridePrice: '' });
+    const factor = new Decimal('100.00000001').times('100.00000001').times('0.0001');
+    const billed = factor.times('1.00000001');
+    expect(preview.dimensionsFactor).toBe(factor.toFixed());
+    expect(preview.billedQuantity).toBe(billed.toFixed());
+    expect(preview.billedQuantity.split('.')[1].length).toBeGreaterThan(8);
+    expect(preview.lineAmountRaw).toBe(billed.times('9.875').toFixed());
+  });
+
+  it('permite conferir e devolver um consumo inferior a oito casas', () => {
+    expect(decimalQuantity('0.000000001').toFixed()).toBe('0.000000001');
+    expect(formatDecimal('0.000000001', STOCK_RESULT_SCALE)).toBe('0,000000001');
+    const params = orderReturnRpcParams({ organizationId: '11111111-1111-4111-8111-111111111111', orderId: '22222222-2222-4222-8222-222222222222', idempotencyKey: '33333333-3333-4333-8333-333333333333', reason: 'Conferido', returns: [{ material_id: '44444444-4444-4444-8444-444444444444', quantity: '0,000000001' }] });
+    expect(params.p_returns).toEqual([{ material_id: '44444444-4444-4444-8444-444444444444', quantity: '0.000000001' }]);
+    expect(() => decimalQuantity('0.' + '0'.repeat(36) + '1')).toThrow();
   });
 
   it('não aceita override sem preço e motivo no contrato de intenção', () => {
