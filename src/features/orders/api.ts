@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase, supabaseConfigError } from '../../lib/supabase';
 import { fetchContacts } from '../contacts/api';
+import { invalidateAfterOrderMutation, ordersQueryKeys } from './cache';
+export { ordersQueryKeys } from './cache';
 import type { ClientDto } from '../contacts/types';
 import { fetchProductDetail, fetchProducts } from '../products/api';
 import type {
@@ -26,13 +28,6 @@ import { decimalAtScale, isUuid, moneyAtTwoDecimals } from './utils';
 
 const PAGE_SIZE = 40;
 const MAX_PAGES = 1000;
-
-export const ordersQueryKeys = {
-  page: (organizationId: string, filters: OrderListFilters, cursor: string | null) => ['orders', 'page', organizationId, filters, cursor] as const,
-  all: (organizationId: string) => ['orders', 'all', organizationId] as const,
-  detail: (organizationId: string, orderId: string) => ['orders', 'detail', organizationId, orderId] as const,
-  catalog: (organizationId: string) => ['orders', 'catalog', organizationId] as const,
-};
 
 function client() {
   if (!supabase) throw new Error(supabaseConfigError ?? 'O serviço de dados está indisponível neste ambiente.');
@@ -271,33 +266,23 @@ export function useOrderCatalogQuery(organizationId: string | null) {
   });
 }
 
-export function useCreateOrderMutation(organizationId: string | null) {
+export function useCreateOrderMutation(_organizationId: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: createOrder,
-    onSuccess: async (result) => {
-      if (!organizationId) return;
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ordersQueryKeys.all(organizationId) }),
-        queryClient.invalidateQueries({ queryKey: ['orders', 'page', organizationId] }),
-        queryClient.invalidateQueries({ queryKey: ordersQueryKeys.detail(organizationId, result.order_id) }),
-        queryClient.invalidateQueries({ queryKey: ordersQueryKeys.catalog(organizationId) }),
-      ]);
+    onSettled: async (result, _error, input) => {
+      // A timeout can follow a committed RPC; refresh even when its response failed.
+      await invalidateAfterOrderMutation(queryClient, input.organizationId, result?.order_id);
     },
   });
 }
 
-export function useSetOrderStatusMutation(organizationId: string | null, orderId: string | null) {
+export function useSetOrderStatusMutation(_organizationId: string | null, _orderId: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: setOrderStatus,
-    onSuccess: async () => {
-      if (!organizationId) return;
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ordersQueryKeys.all(organizationId) }),
-        queryClient.invalidateQueries({ queryKey: ['orders', 'page', organizationId] }),
-        orderId ? queryClient.invalidateQueries({ queryKey: ordersQueryKeys.detail(organizationId, orderId) }) : Promise.resolve(),
-      ]);
+    onSettled: async (_result, _error, input) => {
+      await invalidateAfterOrderMutation(queryClient, input.organizationId, input.orderId);
     },
   });
 }
