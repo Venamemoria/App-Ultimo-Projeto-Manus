@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase, supabaseConfigError } from '../../lib/supabase';
+import { invalidateStockQueries, inventoryQueryKeys } from './cache';
+export { inventoryQueryKeys } from './cache';
 import type {
   AdjustMaterialInput,
   CreateMaterialInput,
@@ -10,13 +12,6 @@ import type {
   UpdateMaterialInput,
 } from './types';
 import type { PurchaseDto, CreatePurchaseInput } from '../purchases/types';
-
-export const inventoryQueryKeys = {
-  materials: (organizationId: string) => ['inventory', 'materials', organizationId] as const,
-  movements: (organizationId: string) => ['inventory', 'movements', organizationId] as const,
-  suppliers: (organizationId: string) => ['inventory', 'suppliers', organizationId] as const,
-  purchases: (organizationId: string) => ['purchases', 'materials', organizationId] as const,
-};
 
 function getClient() {
   if (!supabase) throw new Error(supabaseConfigError ?? 'O serviço de dados está indisponível neste ambiente.');
@@ -94,6 +89,8 @@ export function useMaterialsQuery(organizationId: string | null) {
     queryKey: organizationId ? inventoryQueryKeys.materials(organizationId) : ['inventory', 'materials', 'no-organization'],
     queryFn: () => fetchMaterials(organizationId!),
     enabled: Boolean(organizationId),
+    refetchOnWindowFocus: 'always',
+    refetchInterval: 30_000,
   });
 }
 
@@ -102,6 +99,8 @@ export function useMovementsQuery(organizationId: string | null, enabled = true)
     queryKey: organizationId ? inventoryQueryKeys.movements(organizationId) : ['inventory', 'movements', 'no-organization'],
     queryFn: () => fetchMovements(organizationId!),
     enabled: Boolean(organizationId) && enabled,
+    refetchOnWindowFocus: 'always',
+    refetchInterval: 30_000,
   });
 }
 
@@ -121,20 +120,22 @@ export function usePurchasesQuery(organizationId: string | null) {
   });
 }
 
-function useInventoryMutation<TInput, TResult>(
-  organizationId: string | null,
+function useInventoryMutation<TInput extends { organizationId: string }, TResult>(
+  _organizationId: string | null,
   mutationFn: (input: TInput) => Promise<TResult>,
   includePurchases = false,
 ) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn,
-    onSuccess: async () => {
-      if (!organizationId) return;
+    // A request can commit even if its response is lost; refresh on failure too.
+    // Use the submitted organization rather than the currently selected tenant.
+    onSettled: async (_result, _error, input) => {
+      const organizationId = input.organizationId;
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: inventoryQueryKeys.materials(organizationId) }),
-        queryClient.invalidateQueries({ queryKey: inventoryQueryKeys.movements(organizationId) }),
+        invalidateStockQueries(queryClient, organizationId),
         includePurchases ? queryClient.invalidateQueries({ queryKey: inventoryQueryKeys.purchases(organizationId) }) : Promise.resolve(),
+        includePurchases ? queryClient.invalidateQueries({ queryKey: ['finance-summary', organizationId] }) : Promise.resolve(),
       ]);
     },
   });

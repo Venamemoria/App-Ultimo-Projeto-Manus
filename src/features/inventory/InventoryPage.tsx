@@ -16,7 +16,8 @@ import {
   userFacingInventoryError,
 } from './api';
 import { OrganizationContext, OrganizationPicker } from './OrganizationContext';
-import { canManageInventory, canReceiveInventory, MATERIAL_UNITS, type InventoryTab, type MaterialDto, type MaterialUnit, type MovementType, type StockMovementDto, type SupplierOption } from './types';
+import { movementLabel } from './movements';
+import { canManageInventory, canReceiveInventory, MATERIAL_UNITS, type InventoryTab, type MaterialDto, type MaterialUnit, type StockMovementDto, type SupplierOption } from './types';
 import './inventory.css';
 
 const money = (value: string | Decimal | null | undefined) => {
@@ -40,12 +41,6 @@ function makeIdempotencyKey() {
 
 function errorText(error: unknown, fallback: string) {
   return userFacingInventoryError(error, fallback);
-}
-
-function movementLabel(movement: { movement_type: MovementType; purchase_id: string | null }) {
-  if (movement.movement_type === 'opening') return 'Saldo inicial';
-  if (movement.movement_type === 'receipt') return movement.purchase_id ? 'Compra' : 'Entrada avulsa';
-  return 'Ajuste';
 }
 
 function movementKind(movement: { quantity_delta: string }) {
@@ -233,14 +228,14 @@ function HistoryView({ materials, movements, loading, error, material, type, fro
     <>
       <div className="filter-row history-filters">
         <label className="filter-field"><span>Insumo</span><Select value={material} onChange={(event) => onMaterialChange(event.target.value)}><option value="">Todos os insumos</option>{materials.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</Select></label>
-        <label className="filter-field"><span>Tipo</span><Select value={type} onChange={(event) => onTypeChange(event.target.value)}><option value="">Todos os movimentos</option><option value="opening">Saldo inicial</option><option value="receipt">Entradas</option><option value="adjustment">Ajustes</option></Select></label>
+        <label className="filter-field"><span>Tipo</span><Select value={type} onChange={(event) => onTypeChange(event.target.value)}><option value="">Todos os movimentos</option><option value="opening">Saldo inicial</option><option value="receipt">Entradas</option><option value="adjustment">Ajustes</option><option value="order_deduction">Baixas de pedido</option><option value="order_return">Devoluções de pedido</option></Select></label>
         <Field label="De"><Input type="date" value={from} onChange={(event) => onFromChange(event.target.value)} /></Field>
         <Field label="Até"><Input type="date" value={to} onChange={(event) => onToChange(event.target.value)} /></Field>
       </div>
       {loading ? <Loading label="Carregando histórico auditável…" /> : null}
       {error ? <Alert kind="error">{errorText(error, 'Não foi possível carregar o histórico.')}</Alert> : null}
       {!loading && !error && !movements.length ? <EmptyState title="Nenhum movimento encontrado" description="O histórico mostra somente movimentos reais registrados para esta organização e para os filtros selecionados." /> : null}
-      {!loading && !error && movements.length ? <div className="table-scroll"><table className="data-table history-table"><caption className="sr-only">Histórico de movimentos de estoque</caption><thead><tr><th>Data</th><th>Insumo</th><th>Tipo</th><th>Delta</th><th>Saldo final</th><th>Motivo / referência</th></tr></thead><tbody>{movements.map((movement) => { const item = materials.find((candidate) => candidate.id === movement.material_id); return <tr key={movement.id}><td>{formatDate(movement.created_at)}</td><td><strong>{item?.name ?? 'Insumo não encontrado'}</strong></td><td><span className={`movement-badge movement-${movementKind(movement)}`}>{movementLabel(movement)}</span></td><td className="numeric">{quantity(movement.quantity_delta)}</td><td className="numeric">{quantity(movement.stock_after)}</td><td>{movement.note || (movement.purchase_id ? <span title={`Compra ${movement.purchase_id}`}>Compra vinculada <small className="id-reference">{movement.purchase_id.slice(0, 8)}…</small></span> : '—')}</td></tr>; })}</tbody></table></div> : null}
+      {!loading && !error && movements.length ? <div className="table-scroll"><table className="data-table history-table"><caption className="sr-only">Histórico de movimentos de estoque</caption><thead><tr><th>Data</th><th>Insumo</th><th>Tipo</th><th>Delta</th><th>Saldo final</th><th>Motivo / referência</th></tr></thead><tbody>{movements.map((movement) => { const item = materials.find((candidate) => candidate.id === movement.material_id); return <tr key={movement.id}><td>{formatDate(movement.created_at)}</td><td><strong>{item?.name ?? 'Insumo não encontrado'}</strong></td><td><span className={`movement-badge movement-${movementKind(movement)}`}>{movementLabel(movement)}</span></td><td className="numeric">{quantity(movement.quantity_delta)}</td><td className="numeric">{quantity(movement.stock_after)}</td><td>{movement.note || (!movement.order_id && !movement.purchase_id ? '—' : null)}{movement.order_id ? <>{movement.note ? ' · ' : ''}<Link to={`/pedidos/${movement.order_id}`} title={`Pedido ${movement.order_id}`}>Pedido {movement.order_id.slice(0, 8)}…</Link></> : movement.purchase_id ? <>{movement.note ? ' · ' : ''}<span title={`Compra ${movement.purchase_id}`}>Compra vinculada <small className="id-reference">{movement.purchase_id.slice(0, 8)}…</small></span></> : null}</td></tr>; })}</tbody></table></div> : null}
     </>
   );
 }

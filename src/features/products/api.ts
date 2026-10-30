@@ -251,11 +251,11 @@ export async function registerExistingProductFile(input: Omit<ProductFileUploadI
 }
 
 export function useProductsQuery(organizationId: string | null) {
-  return useQuery({ queryKey: organizationId ? productsQueryKeys.all(organizationId) : ['products', 'all', 'no-organization'], queryFn: () => fetchProducts(organizationId!), enabled: Boolean(organizationId) });
+  return useQuery({ queryKey: organizationId ? productsQueryKeys.all(organizationId) : ['products', 'all', 'no-organization'], queryFn: () => fetchProducts(organizationId!), enabled: Boolean(organizationId), refetchOnWindowFocus: 'always', refetchInterval: 30_000 });
 }
 
 export function useProductMaterialsQuery(organizationId: string | null) {
-  return useQuery({ queryKey: organizationId ? productsQueryKeys.materials(organizationId) : ['products', 'materials', 'no-organization'], queryFn: () => fetchMaterialsForProducts(organizationId!), enabled: Boolean(organizationId) });
+  return useQuery({ queryKey: organizationId ? productsQueryKeys.materials(organizationId) : ['products', 'materials', 'no-organization'], queryFn: () => fetchMaterialsForProducts(organizationId!), enabled: Boolean(organizationId), refetchOnWindowFocus: 'always', refetchInterval: 30_000 });
 }
 
 export function useProductDetailQuery(organizationId: string | null, productId: string | null) {

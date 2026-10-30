@@ -96,6 +96,8 @@ export function useContactsQuery(entity: ContactEntity, organizationId: string |
     queryKey: organizationId ? contactsQueryKeys.all(organizationId, entity) : ['contacts', entity, 'no-organization'],
     queryFn: () => fetchContacts(entity, organizationId!),
     enabled: Boolean(organizationId),
+    refetchOnWindowFocus: entity === 'supplier' ? 'always' : true,
+    refetchInterval: entity === 'supplier' ? 30_000 : false,
   });
 }
 

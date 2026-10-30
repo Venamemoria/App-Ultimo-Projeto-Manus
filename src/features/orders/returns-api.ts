@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase, supabaseConfigError } from '../../lib/supabase';
-import { inventoryQueryKeys } from '../inventory/api';
+import { invalidateStockQueries } from '../inventory/cache';
 import { Decimal, STOCK_RESULT_SCALE } from '../../lib/decimal';
 import { decimalAtScale, isUuid } from './utils';
 import { ordersQueryKeys } from './api';
@@ -169,20 +169,19 @@ export function useOrderReturnsQuery(organizationId: string | null, orderId: str
     queryKey: valid ? returnsQueryKeys.history(organizationId!, orderId!) : ['orders', 'returns', 'invalid'],
     queryFn: () => fetchOrderReturns(organizationId!, orderId!),
     enabled: valid && enabled,
+    refetchOnWindowFocus: 'always',
+    refetchInterval: 30_000,
   });
 }
 
-export function useRecordOrderReturnMutation(organizationId: string | null, orderId: string | null) {
+export function useRecordOrderReturnMutation(_organizationId: string | null, _orderId: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: recordOrderReturn,
-    onSuccess: async () => {
-      if (!organizationId) return;
+    onSettled: async (_result, _error, input) => {
       await Promise.all([
-        orderId ? queryClient.invalidateQueries({ queryKey: ordersQueryKeys.detail(organizationId, orderId) }) : Promise.resolve(),
-        orderId ? queryClient.invalidateQueries({ queryKey: returnsQueryKeys.history(organizationId, orderId) }) : Promise.resolve(),
-        queryClient.invalidateQueries({ queryKey: inventoryQueryKeys.materials(organizationId) }),
-        queryClient.invalidateQueries({ queryKey: inventoryQueryKeys.movements(organizationId) }),
+        queryClient.invalidateQueries({ queryKey: ordersQueryKeys.detail(input.organizationId, input.orderId) }),
+        invalidateStockQueries(queryClient, input.organizationId),
       ]);
     },
   });

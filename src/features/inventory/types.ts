@@ -3,7 +3,7 @@ import type { MembershipRole } from '../../lib/types';
 export const MATERIAL_UNITS = ['un', 'cm', 'm', 'g', 'ml', 'caixa'] as const;
 export type MaterialUnit = typeof MATERIAL_UNITS[number];
 
-export type MovementType = 'opening' | 'receipt' | 'adjustment';
+export type MovementType = 'opening' | 'receipt' | 'adjustment' | 'order_deduction' | 'order_return';
 export type InventoryTab = 'list' | 'alerts' | 'history';
 
 export interface MaterialDto {
@@ -34,6 +34,8 @@ export interface StockMovementDto {
   package_quantity: string | null;
   note: string | null;
   purchase_id: string | null;
+  order_id: string | null;
+  return_line_id: string | null;
   idempotency_key: string | null;
   created_by: string;
   created_at: string;
