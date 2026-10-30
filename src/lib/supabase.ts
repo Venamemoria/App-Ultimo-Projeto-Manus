@@ -97,8 +97,8 @@ export function assertSafeAnonKey(raw: string | undefined): string {
   return value;
 }
 
-export function getSafeNextPath(value: string | null | undefined): '/' | '/conta' | '/estoque' | '/compras' | '/produtos' | '/clientes' | '/fornecedores' | '/pedidos' | '/producao' | '/agenda' {
-  if (value === '/conta' || value === '/estoque' || value === '/compras' || value === '/produtos' || value === '/clientes' || value === '/fornecedores' || value === '/pedidos' || value === '/producao' || value === '/agenda') return value;
+export function getSafeNextPath(value: string | null | undefined): '/' | '/conta' | '/estoque' | '/compras' | '/produtos' | '/clientes' | '/fornecedores' | '/pedidos' | '/producao' | '/agenda' | '/orcamentos' {
+  if (value === '/conta' || value === '/estoque' || value === '/compras' || value === '/produtos' || value === '/clientes' || value === '/fornecedores' || value === '/pedidos' || value === '/producao' || value === '/agenda' || value === '/orcamentos') return value;
   return '/';
 }
 

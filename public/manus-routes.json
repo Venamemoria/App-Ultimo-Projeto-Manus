@@ -12,6 +12,9 @@
     { "path": "/pedidos", "title": "Pedidos" },
     { "path": "/pedidos/:id", "title": "Detalhe do pedido" },
     { "path": "/producao", "title": "Produção" },
-    { "path": "/agenda", "title": "Agenda" }
+    { "path": "/agenda", "title": "Agenda" },
+    { "path": "/orcamentos", "title": "Orçamentos" },
+    { "path": "/orcamento/:id", "title": "Orçamento público" },
+    { "path": "/rastreio/:id", "title": "Rastreio público" }
   ]
 }

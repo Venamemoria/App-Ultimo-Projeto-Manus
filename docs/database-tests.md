@@ -89,3 +89,17 @@ Os 11 grupos são:
 As fixtures de Products são exclusivamente SQL local. O teste do Storage insere uma linha controlada em `storage.objects` para exercitar o contrato de bucket/policy e depois chama `vm_register_product_file` para verificar MIME e tamanho; isso é uma fixture do contrato local, **não** um upload HTTP, não um upload de runtime e não um download real. A suite também verifica que registrar arquivo inexistente, inserir diretamente na tabela de arquivos, usar path malicioso ou atravessar tenant falha.
 
 A suite Products não afirma que `vm-product-media` foi criado no Supabase real, que qualquer objeto foi enviado a Storage real ou que uma URL assinada foi emitida. O resultado mantém a distinção entre o banco local isolado e o ambiente Supabase autorizado.
+
+## Suite Public Sales
+
+A suite `public_sales` recria somente o database local marcado `vm_test`, aplica em ordem as migrations versionadas até `20261030004000_tracking_minimal_acl.sql` e executa `tests/database/public_sales.sql`, além do probe de concorrência com duas conexões reais locais.
+
+Execução verificada:
+
+```bash
+/home/ubuntu/.venvs/venamemoria-db/bin/python scripts/run_database_tests.py --suite public_sales --stop
+```
+
+Resultado observado: **17 grupos passaram, 0 falhas**. Grupos: tenants e identidades owner/finance; fixtures reais locais de cliente/material/produto versionado; ACL pública e ausência de leitura anônima de tabelas; emissão com totais/termos congelados; projeção pública e token inválido; imutabilidade dos snapshots após alterações de catálogo/cliente; aceite anônimo formando pedido pendente dos snapshots congelados; replay idempotente; vínculo de revisão e imutabilidade de aprovado; revogação e tokens desconhecidos sem gravações parciais; ACL de tracking e validade; paginação/listagem administrativa; projeção allowlist de `vm_get_quote_admin`, preço catalogado oculto, preço manual exposto e comportamento NULL por tenant; finance autorizado e viewer/anon negados; ACL do getter administrativo de tracking para owner/finance com viewer/tenant/anon negados e projeção pública exata sem dados comerciais; fixture concorrente; e probe de corrida de aceite em duas conexões, com somente um pedido/aceite/evento/conjunto de notificações e sem dedução de material.
+
+O runner reportou `vm_test`, socket Unix `/home/ubuntu/venamemoria/.local/test-db/socket`, `listen_addresses=''` e cluster marcado `/home/ubuntu/venamemoria/.local/test-db`; o runner interrompeu o cluster isolado após a suite. Esse resultado é exclusivamente local. Separadamente, as migrations `20261030003000_public_sales`, `20261030003500_quote_admin_list` e `20261030004000_tracking_minimal_acl` foram aplicadas no Supabase autorizado; sua verificação está em `docs/public-sales-verification.md`. Isso não comprova chamada de PostgREST pela UI, entrega Realtime em navegador ou publicação.

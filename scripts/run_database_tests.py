@@ -49,6 +49,10 @@ ORDERS_TEST = ROOT / "tests" / "database" / "orders.sql"
 ORDERS_MIGRATION = ROOT / "supabase" / "migrations" / "20261030002000_orders.sql"
 ORDER_RETURNS_TEST = ROOT / "tests" / "database" / "order_returns.sql"
 ORDER_RETURNS_MIGRATION = ROOT / "supabase" / "migrations" / "20261030002200_order_returns.sql"
+PUBLIC_SALES_TEST = ROOT / "tests" / "database" / "public_sales.sql"
+PUBLIC_SALES_MIGRATION = ROOT / "supabase" / "migrations" / "20261030003000_public_sales.sql"
+QUOTE_ADMIN_LIST_MIGRATION = ROOT / "supabase" / "migrations" / "20261030004000_tracking_minimal_acl.sql"
+REALTIME_CONTRACT = ROOT / "tests" / "database" / "realtime_contract.sql"
 
 AUTH_USER_A = "00000000-0000-0000-0000-0000000000a1"
 AUTH_USER_B = "00000000-0000-0000-0000-0000000000b2"
@@ -387,6 +391,23 @@ def bootstrap_storage_contract() -> None:
         )
 
 
+def bootstrap_realtime_contract() -> None:
+    """Install only the verified local Realtime message contract for public_sales.
+
+    This is a local relational contract: it records native ``realtime.send``
+    calls as rows and never represents WebSocket delivery or production state.
+    The call is guarded by the marked isolated cluster preflight in ``main``.
+    """
+    if not REALTIME_CONTRACT.is_file():
+        raise RuntimeError("REALTIME_CONTRACT_MISSING")
+    source = REALTIME_CONTRACT.read_text(encoding="utf-8")
+    if "CREATE OR REPLACE FUNCTION realtime.send" not in source or "CREATE TABLE realtime.messages" not in source:
+        raise RuntimeError("REALTIME_CONTRACT_UNVERIFIED")
+    with connect(DB_NAME) as conn:
+        conn.autocommit = True
+        conn.execute(source, prepare=False)
+
+
 def preflight_local_database() -> None:
     with connect(DB_NAME) as conn:
         conn.autocommit = True
@@ -442,6 +463,12 @@ def selected_migrations(suite: str) -> list[Path]:
         if ORDER_RETURNS_MIGRATION not in paths:
             raise RuntimeError("ORDER_RETURNS_MIGRATION_MISSING")
         return [path for path in paths if path.name <= ORDER_RETURNS_MIGRATION.name]
+    if suite == "public_sales":
+        if PUBLIC_SALES_MIGRATION not in paths:
+            raise RuntimeError("PUBLIC_SALES_MIGRATION_MISSING")
+        if QUOTE_ADMIN_LIST_MIGRATION not in paths:
+            raise RuntimeError("QUOTE_ADMIN_LIST_MIGRATION_MISSING")
+        return [path for path in paths if path.name <= QUOTE_ADMIN_LIST_MIGRATION.name]
     raise RuntimeError("UNKNOWN_SUITE")
 
 
@@ -472,6 +499,10 @@ def run_sql_suite(test_path: Path) -> list[str]:
         conn.execute("BEGIN")
         try:
             conn.execute(source, prepare=False)
+            # Suites may deliberately finish while simulating an authenticated
+            # or anonymous request. Restore the local harness identity before
+            # reading its private assertion ledger.
+            conn.execute("RESET ROLE")
             labels = [row[0] for row in conn.execute("SELECT label FROM pg_temp.qa_test_results ORDER BY ordinal").fetchall()]
             if not labels:
                 raise RuntimeError("NO_TEST_ASSERTIONS")
@@ -563,6 +594,91 @@ def run_orders_concurrency_probe() -> list[str]:
     return ["real two-connection status serialization"]
 
 
+def run_public_sales_concurrency_probe() -> list[str]:
+    """Race two anonymous local sessions against the committed QA quote."""
+    # Refuse to use a similarly named quote unless the exact marked local DB,
+    # private Unix socket, and non-network server preflight all still match.
+    with connect(DB_NAME) as conn:
+        conn.autocommit = False
+        try:
+            if not marker_is_valid(conn):
+                raise RuntimeError("PUBLIC_SALES_RACE_DATABASE_NOT_MARKED")
+            environment = conn.execute(
+                "SELECT current_database(), inet_server_addr() IS NULL, "
+                "current_setting('port')::integer, current_setting('listen_addresses'), "
+                "current_setting('unix_socket_directories')"
+            ).fetchone()
+            if environment != (DB_NAME, True, PORT, "", str(SOCKET_DIR)):
+                raise RuntimeError("PUBLIC_SALES_RACE_LOCAL_SOCKET_PREFLIGHT_FAILED")
+            target = conn.execute(
+                """
+                SELECT q.id, q.public_token
+                FROM public.vm_quotes q
+                WHERE q.title = 'QA race quote' AND q.status = 'Sent'
+                ORDER BY q.created_at DESC, q.id
+                LIMIT 2
+                """
+            ).fetchall()
+            if len(target) != 1:
+                raise RuntimeError("PUBLIC_SALES_RACE_FIXTURE_MISSING_OR_AMBIGUOUS")
+            quote_id, token = target[0]
+            conn.rollback()
+        except BaseException:
+            conn.rollback()
+            raise
+
+    barrier = Barrier(2)
+
+    def approve(_: int):
+        with connect(DB_NAME) as conn:
+            try:
+                conn.execute("SET ROLE anon")
+                conn.execute("SELECT set_config('request.jwt.claim.role', 'anon', false)")
+                barrier.wait(timeout=10)
+                result = conn.execute(
+                    "SELECT order_id, tracking_token FROM public.vm_approve_quote(%s)",
+                    (token,),
+                ).fetchone()
+                if result is None:
+                    raise RuntimeError("PUBLIC_SALES_RACE_EMPTY_RESULT")
+                conn.commit()
+                return result
+            except BaseException:
+                conn.rollback()
+                raise
+
+    with ThreadPoolExecutor(max_workers=2, thread_name_prefix="public-sales-qa") as pool:
+        results = list(pool.map(approve, (1, 2)))
+    if results[0] != results[1] or results[0][0] is None or results[0][1] is None:
+        raise RuntimeError("PUBLIC_SALES_RACE_RESULT_MISMATCH")
+    order_id, tracking_token = results[0]
+
+    with connect(DB_NAME) as conn:
+        state = conn.execute(
+            """
+            SELECT
+              (SELECT count(*) FROM vm_private.vm_quote_acceptances WHERE quote_id = %s),
+              (SELECT count(*) FROM vm_private.vm_quote_acceptances WHERE quote_id = %s AND order_id = %s),
+              (SELECT count(*) FROM public.vm_quotes WHERE id = %s AND status = 'Approved' AND accepted_order_id = %s),
+              (SELECT count(*) FROM public.vm_tracking_capabilities WHERE token = %s AND order_id = %s AND revoked_at IS NULL),
+              (SELECT count(*) FROM public.vm_order_events WHERE order_id = %s),
+              (SELECT count(*) FROM public.vm_orders WHERE id = %s AND status = 'Pendente' AND consumed_at IS NULL),
+              (SELECT count(*) FROM public.vm_order_consumptions WHERE order_id = %s),
+              (SELECT count(*) FROM public.vm_notifications n JOIN public.vm_order_events e ON e.id = n.event_id WHERE e.order_id = %s),
+              (SELECT count(*) FROM public.vm_memberships m JOIN public.vm_quotes q ON q.organization_id = m.organization_id WHERE q.id = %s)
+            """,
+            (quote_id, quote_id, order_id, quote_id, order_id,
+             tracking_token, order_id, order_id, order_id, order_id, order_id, quote_id),
+        ).fetchone()
+    acceptance_count, linked_count, approved_count, tracking_count, event_count, pending_count, consumption_count, notification_count, membership_count = state
+    if (acceptance_count, linked_count, approved_count, tracking_count, event_count,
+        pending_count, consumption_count) != (1, 1, 1, 1, 1, 1, 0):
+        raise RuntimeError("PUBLIC_SALES_RACE_DUPLICATE_OR_UNEXPECTED_SIDE_EFFECT")
+    if notification_count != membership_count:
+        raise RuntimeError("PUBLIC_SALES_RACE_NOTIFICATION_COUNT_MISMATCH")
+    return ["real two-connection anonymous quote-approval race; one order, acceptance, initial event and notification set; no material deduction"]
+
+
 def print_success(suite: str, migrations: list[str], labels: list[str]) -> None:
     status = {
         "status": "passed",
@@ -582,7 +698,7 @@ def print_success(suite: str, migrations: list[str], labels: list[str]) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Execute isolated PostgreSQL QA suites")
-    parser.add_argument("--suite", choices=("foundation", "inventory", "products", "contacts", "orders", "order_returns"), default="foundation")
+    parser.add_argument("--suite", choices=("foundation", "inventory", "products", "contacts", "orders", "order_returns", "public_sales"), default="foundation")
     parser.add_argument("--stop", action="store_true", help="stop only this marked local cluster after the run")
     args = parser.parse_args()
     try:
@@ -593,9 +709,11 @@ def main() -> int:
         # marked cluster.  A default package cluster is never used as a fixture.
         drop_and_create_marked_database()
         bootstrap_roles_auth_and_users()
-        if args.suite in ("products", "contacts", "orders", "order_returns"):
+        if args.suite in ("products", "contacts", "orders", "order_returns", "public_sales"):
             bootstrap_storage_contract()
         preflight_local_database()
+        if args.suite == "public_sales":
+            bootstrap_realtime_contract()
         if args.suite == "inventory" and not INVENTORY_TEST.is_file():
             raise RuntimeError("INVENTORY_SUITE_SQL_MISSING")
         if args.suite == "products" and not PRODUCTS_TEST.is_file():
@@ -606,6 +724,8 @@ def main() -> int:
             raise RuntimeError("ORDERS_SUITE_SQL_MISSING")
         if args.suite == "order_returns" and not ORDER_RETURNS_TEST.is_file():
             raise RuntimeError("ORDER_RETURNS_SUITE_SQL_MISSING")
+        if args.suite == "public_sales" and not PUBLIC_SALES_TEST.is_file():
+            raise RuntimeError("PUBLIC_SALES_SUITE_SQL_MISSING")
         migrations = apply_migrations(selected_migrations(args.suite))
         test_path = (
             FOUNDATION_TEST if args.suite == "foundation"
@@ -613,11 +733,14 @@ def main() -> int:
             else PRODUCTS_TEST if args.suite == "products"
             else CONTACTS_TEST if args.suite == "contacts"
             else ORDERS_TEST if args.suite == "orders"
-            else ORDER_RETURNS_TEST
+            else ORDER_RETURNS_TEST if args.suite == "order_returns"
+            else PUBLIC_SALES_TEST
         )
         labels = run_sql_suite(test_path)
         if args.suite == "orders":
             labels.extend(run_orders_concurrency_probe())
+        if args.suite == "public_sales":
+            labels.extend(run_public_sales_concurrency_probe())
         print_success(args.suite, migrations, labels)
         if args.stop:
             stop_cluster()

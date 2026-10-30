@@ -1,6 +1,6 @@
 # Vê na Memória — entregas e critérios
 
-Plano aprovado pelo usuário em 29/10/2026. Fundação Supabase, autenticação/organização, inventário/compras, produtos/receitas, cadastros e pedidos/baixa/produção/agenda/devolução auditada estão implementados. A execução segue para orçamento/rastreio público e paridade restante; ainda não há aplicação publicada. O schema evolui por migrations, preservando dados.
+Plano aprovado pelo usuário em 29/10/2026. Fundação Supabase, autenticação/organização, inventário/compras, produtos/receitas, cadastros, pedidos/baixa/produção/agenda/devolução auditada e orçamento/rastreio público estão implementados. A execução segue para notificações, integrações e paridade restante; ainda não há aplicação publicada. O schema evolui por migrations, preservando dados.
 
 ## [x] Fundação Supabase e segurança antes da UI
 
@@ -46,13 +46,17 @@ Evidência: Orders usa views/RLS e RPCs Supabase reais, lista paginada por UUID 
 
 Devolução física: schema aplicado, nove grupos SQL isolados e formulário owner/admin integrado, motivo/quantidade física explícita, cap por consumo e replay sem duplo retorno. Nenhum retorno real de negócio criado. Pendências do item completo: gestão de tarefas; reembolso é um fluxo financeiro separado. Paridade não inspecionada continua aberta.
 
-## [ ] Orçamentos interativos com URL pública e aceite
+## [x] Orçamentos interativos com URL pública e aceite
 
 Gerar URL pública `/orcamento/[id]` para cada orçamento; identificador opaco e imprevisível, distinto do ID interno, com validade e revogação. Exibir itens, valor, prazos/termos permitidos e botão “Aprovar Orçamento”. Ao clicar, validar e atualizar o status para `Approved`, criar/vincular o pedido com snapshots na mesma transação e redirecionar o cliente à página de acompanhamento. Cliques repetidos retornam o mesmo pedido/link sem duplicação de pedido, eventos ou notificações. Orçamento inválido, expirado ou revogado não pode ser aprovado. Público não recebe SELECT nas tabelas internas nem custos, margens, observações internas, CPF, endereço, telefone, e-mail ou credenciais.
 
-## [ ] Página pública de acompanhamento em tempo real
+Evidência: migrations 030/035 aplicadas e RPCs administrativos verificadas; 17 grupos SQL isolados, inclusive concorrência real local, passaram. `/orcamentos` emite/revisa/revoga propostas multi-item com produtos/serviços, variantes, m² e override justificado. `/orcamento/:id` apresenta o snapshot comercial permitido; aceite chama RPC idempotente, cria pedido pendente e encaminha ao rastreio. Não foi criado nem aprovado orçamento de negócio real. Ver `docs/public-sales-verification.md`.
+
+## [x] Página pública de acompanhamento em tempo real
 
 Criar `/rastreio/[id]` para que o cliente veja em tempo real o estado atual do pedido, datas e histórico público permitido. Usar token público opaco com acesso limitado e revogável. Realtime deve respeitar autorização da projeção pública; não abrir tabelas operacionais a anônimos. Não apresentar polling periódico como tempo real. Página deve lidar com link inválido, conexão interrompida e pedido indisponível sem expor dados privados.
+
+Evidência: migration 040 aplicada; consulta remota somente leitura confirmou que `vm_get_order_tracking` requer owner/admin/finance e não pode ser executada por `anon`, enquanto a projeção pública de `vm_get_tracking` expõe apenas marca/código/título/status/datas/histórico, sem itens, preços, notas ou termos. Os 17 grupos SQL isolados cobrem viewer/tenant negado e allowlist exata. A UI assina Broadcast e atualiza via RPC, sem polling; entrega de frame WebSocket ao vivo não foi exercitada. Nenhum link real foi enviado a cliente; o app não está publicado. Ver `docs/public-sales-verification.md`.
 
 ## [ ] Notificações persistidas na UI e estrutura WhatsApp
 

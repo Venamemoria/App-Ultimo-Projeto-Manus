@@ -16,6 +16,9 @@ const OrdersPage = lazy(() => import('../features/orders/list').then((module) =>
 const OrderDetailPage = lazy(() => import('../features/orders/detail').then((module) => ({ default: module.OrderDetailPage })));
 const ProductionPage = lazy(() => import('../features/orders/board').then((module) => ({ default: module.ProductionPage })));
 const CalendarPage = lazy(() => import('../features/orders/calendar').then((module) => ({ default: module.CalendarPage })));
+const QuotesPage = lazy(() => import('../features/publicSales/pages').then((module) => ({ default: module.QuotesPage })));
+const PublicQuotePage = lazy(() => import('../features/publicSales/pages').then((module) => ({ default: module.PublicQuotePage })));
+const PublicTrackingPage = lazy(() => import('../features/publicSales/pages').then((module) => ({ default: module.PublicTrackingPage })));
 
 function ProtectedRoute() {
   const { loading, session } = useSession();
@@ -31,6 +34,8 @@ export default function App() {
       <Routes>
         <Route path="/entrar" element={<AuthPage />} />
         <Route path="/recuperar" element={<RecoverPage />} />
+        <Route path="/orcamento/:id" element={<PublicQuotePage />} />
+        <Route path="/rastreio/:id" element={<PublicTrackingPage />} />
         <Route element={<ProtectedRoute />}>
           <Route element={<AppLayout />}>
             <Route index element={<DashboardPage />} />
@@ -44,6 +49,7 @@ export default function App() {
             <Route path="pedidos/:id" element={<OrderDetailPage />} />
             <Route path="producao" element={<ProductionPage />} />
             <Route path="agenda" element={<CalendarPage />} />
+            <Route path="orcamentos" element={<QuotesPage />} />
           </Route>
         </Route>
         <Route path="*" element={<Navigate replace to="/" />} />
