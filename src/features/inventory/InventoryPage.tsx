@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { AlertTriangle, Archive, Download, PackagePlus, Pencil, Plus, Search, SlidersHorizontal, Wrench } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Alert, Button, EmptyState, Field, Input, Loading, Modal, PageHeader, Select, StatCard, Textarea } from '../../components/ui';
-import { Decimal, decimalString, formatDecimal, parseDecimalInput, STOCK_RESULT_SCALE, unitCostPreview } from '../../lib/decimal';
+import { Decimal, decimalString, formatDecimal, parseDecimalInput, STOCK_RESULT_SCALE, UNIT_COST_SCALE, unitCostPreview } from '../../lib/decimal';
 import { formatDate } from '../../lib/format';
 import { useSession } from '../../app/AuthProvider';
 import {
@@ -20,7 +20,7 @@ import { canManageInventory, canReceiveInventory, MATERIAL_UNITS, type Inventory
 import './inventory.css';
 
 const money = (value: string | Decimal | null | undefined) => {
-  const formatted = formatDecimal(value, 8);
+  const formatted = formatDecimal(value, UNIT_COST_SCALE);
   return formatted === '—' ? formatted : `R$ ${formatted}`;
 };
 

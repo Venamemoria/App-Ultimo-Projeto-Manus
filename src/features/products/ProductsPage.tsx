@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Archive, ChevronRight, Download, Edit3, Eye, ImageOff, Package, Plus, Search, Tag, Upload, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Alert, Button, EmptyState, Loading, Modal, PageHeader, Select, StatCard } from '../../components/ui';
+import { COMPOSITION_COST_SCALE, UNIT_COST_SCALE, formatDecimal } from '../../lib/decimal';
 import { formatCurrency, formatDate, formatNumber } from '../../lib/format';
 import { useSession } from '../../app/AuthProvider';
 import { OrganizationContext, OrganizationPicker } from '../inventory/OrganizationContext';
@@ -13,6 +14,11 @@ import './products.css';
 type ProductWithThumbnail = ProductDto & { thumbnail_url?: string };
 
 type PriceFilter = 'all' | 'promo' | 'regular';
+
+function formatCost(value: string | null | undefined, scale = COMPOSITION_COST_SCALE) {
+  const text = formatDecimal(value, scale);
+  return text === '—' ? text : `R$ ${text}`;
+}
 
 function csvCell(value: string | number | null | undefined) {
   const text = String(value ?? '');
@@ -31,8 +37,8 @@ function exportProducts(products: ProductWithThumbnail[]) {
       formatCurrency(product.price),
       product.promo_price ? formatCurrency(product.promo_price) : '',
       product.minimum_quantity,
-      formatCurrency(product.current_composition_cost),
-      formatCurrency(product.current_material_cost),
+      formatCost(product.current_composition_cost),
+      formatCost(product.current_material_cost),
       product.sku ?? '',
       product.is_catalog_visible ? 'Sim' : 'Não',
       product.is_featured ? 'Sim' : 'Não',
@@ -95,14 +101,14 @@ function ProductDetails({ organizationId, canEdit, snapshot, onClose }: { organi
         <div className="detail-grid">
           <div><span>Preço normal</span><strong>{formatCurrency(version.price)}</strong></div>
           <div><span>Preço promocional</span><strong>{version.promo_price ? formatCurrency(version.promo_price) : '—'}</strong></div>
-          <div><span>Custo congelado da versão</span><strong>{formatCurrency(version.composition_cost)}</strong></div>
-          <div><span>Custo corrente dos materiais</span><strong>{formatCurrency(product.current_material_cost)}</strong></div>
+          <div><span>Custo congelado da versão</span><strong>{formatCost(version.composition_cost)}</strong></div>
+          <div><span>Custo corrente dos materiais</span><strong>{formatCost(product.current_material_cost)}</strong></div>
           <div><span>Modo de preço</span><strong>{pricingModeLabel(version.pricing_mode)}</strong></div>
         </div>
         {version.description ? <section className="detail-section"><h4>Descrição</h4><p className="detail-text">{version.description}</p></section> : null}
-        <section className="detail-section"><h4>Receita da versão</h4>{version.composition_snapshot.length ? <div className="detail-lines">{version.composition_snapshot.map((component) => <div key={component.material_id}><span>{component.material_id.slice(0, 8)}… · {component.unit}</span><strong>{component.quantity} × {formatCurrency(component.unit_cost)}</strong></div>)}</div> : <p className="muted-note">Produto sem materiais na receita desta versão. O custo indicativo é zero real.</p>}</section>
+        <section className="detail-section"><h4>Receita da versão</h4>{version.composition_snapshot.length ? <div className="detail-lines">{version.composition_snapshot.map((component) => <div key={component.material_id}><span>{component.material_id.slice(0, 8)}… · {component.unit}</span><strong>{component.quantity} × {formatCost(component.unit_cost, UNIT_COST_SCALE)}</strong></div>)}</div> : <p className="muted-note">Produto sem materiais na receita desta versão. O custo indicativo é zero real.</p>}</section>
         <section className="detail-section"><h4>Variações preservadas</h4>{snapshot.variants.length ? <div className="detail-lines">{snapshot.variants.map((variant) => <div key={variant.id}><span>{variant.name}{variant.active ? '' : ' · desativada'}</span><strong>{formatCurrency(variant.price)}</strong></div>)}</div> : <p className="muted-note">Nenhuma variação registrada.</p>}</section>
-        <section className="detail-section"><h4>Histórico de versões</h4><div className="detail-lines">{versionHistory.map((item) => <div key={item.product_version}><span>Versão {item.product_version} · {formatDate(item.created_at)}{item.product_version === version.product_version ? ' · atual' : ''}</span><strong>{formatCurrency(item.composition_cost)}</strong></div>)}</div></section>
+        <section className="detail-section"><h4>Histórico de versões</h4><div className="detail-lines">{versionHistory.map((item) => <div key={item.product_version}><span>Versão {item.product_version} · {formatDate(item.created_at)}{item.product_version === version.product_version ? ' · atual' : ''}</span><strong>{formatCost(item.composition_cost)}</strong></div>)}</div></section>
         <section className="detail-section"><h4>Arquivos privados registrados</h4>{files.length ? <div className="detail-files">{files.map((file) => <div key={file.id}><span>{file.name} · {file.kind}</span>{file.signed_url ? <a className="text-link" href={file.signed_url} target="_blank" rel="noreferrer">Abrir</a> : <span className="muted-note">URL temporária indisponível</span>}</div>)}</div> : <p className="muted-note">Nenhum arquivo registrado.</p>}</section>
         <ProductFilesPanel organizationId={organizationId} productId={product.id} canEdit={canEdit} />
       </div>
@@ -111,7 +117,7 @@ function ProductDetails({ organizationId, canEdit, snapshot, onClose }: { organi
 }
 
 function ProductTable({ products, canEdit, onEdit, onDetails }: { products: ProductWithThumbnail[]; canEdit: boolean; onEdit: (product: ProductDto) => void; onDetails: (product: ProductDto) => void }) {
-  return <div className="table-scroll"><table className="data-table products-table"><caption className="sr-only">Produtos cadastrados</caption><thead><tr><th>Produto</th><th>Categoria</th><th>Preço</th><th>Modo</th><th>Custo receita</th><th>Catálogo</th><th>Ações</th></tr></thead><tbody>{products.map((product) => <tr key={product.id}><th scope="row"><div className="product-cell">{product.thumbnail_url ? <img className="product-thumb" src={product.thumbnail_url} alt="" /> : <div className="product-thumb-empty" aria-hidden="true"><ImageOff size={16} /></div>}<span><strong>{product.name}</strong><small>{product.sku ? `SKU ${product.sku}` : 'Sem SKU'}</small></span></div></th><td>{product.category}<small className="table-subline">{product.categories.length > 1 ? `+${product.categories.length - 1} categorias` : 'categoria principal'}</small></td><td className="numeric"><strong>{formatCurrency(product.promo_price ?? product.price)}</strong>{product.promo_price ? <small className="table-subline">de {formatCurrency(product.price)}</small> : null}</td><td>{pricingModeLabel(product.pricing_mode)}</td><td className="numeric">{formatCurrency(product.current_composition_cost)}</td><td><span className={product.is_catalog_visible ? 'status-pill status-on' : 'status-pill'}>{product.is_catalog_visible ? 'Visível' : 'Inativo'}</span>{product.is_featured ? <small className="table-subline">Destaque</small> : null}</td><td><div className="table-actions"><Button variant="ghost" icon={<Eye size={15} />} onClick={() => onDetails(product)}>Detalhar</Button>{canEdit ? <Button variant="secondary" icon={<Edit3 size={15} />} onClick={() => onEdit(product)}>Editar</Button> : null}</div></td></tr>)}</tbody></table></div>;
+  return <div className="table-scroll"><table className="data-table products-table"><caption className="sr-only">Produtos cadastrados</caption><thead><tr><th>Produto</th><th>Categoria</th><th>Preço</th><th>Modo</th><th>Custo receita</th><th>Catálogo</th><th>Ações</th></tr></thead><tbody>{products.map((product) => <tr key={product.id}><th scope="row"><div className="product-cell">{product.thumbnail_url ? <img className="product-thumb" src={product.thumbnail_url} alt="" /> : <div className="product-thumb-empty" aria-hidden="true"><ImageOff size={16} /></div>}<span><strong>{product.name}</strong><small>{product.sku ? `SKU ${product.sku}` : 'Sem SKU'}</small></span></div></th><td>{product.category}<small className="table-subline">{product.categories.length > 1 ? `+${product.categories.length - 1} categorias` : 'categoria principal'}</small></td><td className="numeric"><strong>{formatCurrency(product.promo_price ?? product.price)}</strong>{product.promo_price ? <small className="table-subline">de {formatCurrency(product.price)}</small> : null}</td><td>{pricingModeLabel(product.pricing_mode)}</td><td className="numeric">{formatCost(product.current_composition_cost)}</td><td><span className={product.is_catalog_visible ? 'status-pill status-on' : 'status-pill'}>{product.is_catalog_visible ? 'Visível' : 'Inativo'}</span>{product.is_featured ? <small className="table-subline">Destaque</small> : null}</td><td><div className="table-actions"><Button variant="ghost" icon={<Eye size={15} />} onClick={() => onDetails(product)}>Detalhar</Button>{canEdit ? <Button variant="secondary" icon={<Edit3 size={15} />} onClick={() => onEdit(product)}>Editar</Button> : null}</div></td></tr>)}</tbody></table></div>;
 }
 
 export function ProductsPage() {
