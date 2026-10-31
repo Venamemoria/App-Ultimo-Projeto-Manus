@@ -28,7 +28,7 @@ export function NotificationBell() {
 
   return (
     <div className="notification-bell-wrap">
-      <Button className="notification-bell" variant="ghost" aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen((value) => !value)} icon={<Bell size={17} />}>
+      <Button className="notification-bell" variant="ghost" aria-label="Notificações" aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen((value) => !value)} icon={<Bell size={17} />}>
         <span className="notification-label">Notificações</span>
         {unread ? <span className="notification-count" aria-label={`${unread} não lidas`}>{unread > 99 ? '99+' : unread}</span> : null}
       </Button>

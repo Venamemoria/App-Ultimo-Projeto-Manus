@@ -12,13 +12,13 @@ A prévia local usará Vite em `0.0.0.0:3000`, porta já configurada no projeto.
 
 ## Identidade visual e referências
 
-As referências têm identidades visuais diferentes. Design unificado aprovado: usar a organização de módulos e navegação agrupada da Papelaria On, com a apresentação clara e os tons quentes do AtelierFlow, sob a marca Vê na Memória. Não é uma afirmação de que duas interfaces distintas podem ser copiadas pixel a pixel simultaneamente.
+Diretriz visual atualizada pelo usuário em 31/10/2026: usar exclusivamente o padrão estético e a experiência SaaS do Atelier Flow — minimalista, premium e focado no conteúdo. Abandonar qualquer semelhança visual com a Papelaria On; essa referência deixa de orientar o design do produto. A hierarquia funcional dos módulos e as regras de negócio já existentes continuam preservadas.
 
-O layout será de ferramenta de gestão: barra lateral persistente no desktop, cabeçalho de contexto, área de trabalho ampla, cartões de indicadores, tabelas com filtros, formulários em etapas e ações primárias consistentes. No celular, a barra lateral vira painel recolhível; formulários e ações continuam acessíveis sem depender de hover. Não usar imagens decorativas nem dados fictícios para preencher os painéis.
+O App Shell terá cabeçalho limpo e barra lateral persistente, elegante e intuitiva; em telas menores, a navegação torna-se um painel acessível e recolhível. Dashboard e páginas de gestão reutilizam superfícies, cartões e tabelas espaçosos, com hierarquia visual clara e sem excesso de ornamentos. A primeira fatia aplica a refatoração visual ao Header, Sidebar e Dashboard principal, mantendo intactos autenticação, rotas, permissões e consultas Supabase.
 
-Design aprovado: fundo creme, superfícies claras, acentos terracota e estados com cor mais texto; tipografia serifada nos títulos e sans-serif nos dados e controles. Identidade da marca em um wordmark próprio com um sinal de papel dobrado. Animações curtas para abrir painéis e confirmar alterações, respeitando movimento reduzido. Microcopy direta: “Cadastrar insumo” e “Estoque insuficiente para iniciar a produção”.
+Usar tons quentes de creme/off-white como base, superfícies claras e destaques/ações primárias em tons terrosos e terracota. Títulos principais usam serif elegante; dados, navegação e controles usam sans-serif limpa. Preservar o wordmark e a marca existentes, aplicar foco visível e microinterações sutis que respeitem movimento reduzido. Microcopy direta: “Cadastrar insumo” e “Estoque insuficiente para iniciar a produção”.
 
-A paridade de funcionalidades continua como requisito. As telas já inspecionadas estão registradas em `referencias.md`; fluxos ainda não abertos serão inspecionados antes de sua implementação. Nenhum módulo será declarado equivalente apenas porque o menu aparece. Funcionalidades exclusivas da operação comercial das empresas de referência, integrações proprietárias e recursos bloqueados por assinatura exigem definição específica, não serão apresentados como integrações já disponíveis neste ERP.
+A paridade funcional continua como requisito separado do design: nenhuma página será considerada concluída apenas porque aparece no menu. Esta refatoração visual não deve introduzir dados fictícios, substituir a stack Vite/React/Tailwind/Supabase, alterar contratos de backend nem expor custos a papéis sem permissão. Usar componentes shadcn/ui locais e acessíveis para os elementos compartilhados desta fatia.
 
 ## Banco de dados e segurança primeiro
 
@@ -78,13 +78,17 @@ Esses módulos serão construídos em fatias verticais reais depois da fundaçã
 
 - `src/app/`: roteamento React, providers, autenticação e composição do shell.
 - `src/features/`: módulos separados de estoque, produtos, clientes, pedidos, orçamentos, acompanhamento, produção, financeiro, relatórios, catálogo e configurações.
-- `src/components/`: controles reutilizáveis, formulários, tabelas, estados vazios e navegação responsiva.
+- `src/components/` e `src/components/ui/`: controles compartilhados, componentes shadcn/ui, formulários, tabelas, estados vazios e navegação responsiva.
 - `src/lib/`: cliente Supabase, tipos gerados, decimal, validação, datas e formatação pt-BR.
 - `supabase/migrations/`: schema, índices, RLS, RPCs e evolução versionada.
 - `supabase/functions/`: endpoints públicos protegidos, adaptadores e processamento de eventos.
 - `public/`: identidade visual, favicon e manifesto atualizado `manus-routes.json`.
 - `tests/`: verificações automatizadas dos cálculos e integrações transacionais em ambiente dedicado, sem dados fictícios dentro da aplicação ou banco do usuário.
 - `docs/`: instalação, configuração e instruções das integrações, sem credenciais.
+
+## Fatia atual: App Shell e Dashboard no padrão Atelier Flow
+
+Manter o projeto como SPA Vite/React/TypeScript com TailwindCSS e Supabase. Usar componentes shadcn/ui em `src/components/ui/`, instalados como código local com aliases compatíveis ao setup Vite atual; não introduzir outro framework, serviço de dados ou camada de servidor. `src/app/layout.tsx` concentra Header, Sidebar, contexto de organização, papel, notificações e saída; deve conservar links reais e visibilidade por papel. `src/app/pages.tsx` continua responsável pelo onboarding e Dashboard, preservando métricas consultadas do Supabase, estados de carregamento/erro e seletor de organização. `src/index.css` define tokens quentes, tipografia, espaçamento e superfícies compartilhadas; os estilos comuns de cartões e tabelas devem resultar em páginas de gestão mais espaçosas sem reescrever suas regras de negócio nesta fatia. Nenhuma métrica ou atividade recente será inventada para preencher espaço.
 
 ## Sequência de entregas e GitHub
 
