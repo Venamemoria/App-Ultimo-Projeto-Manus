@@ -12,9 +12,9 @@ export interface MaterialDto {
   name: string;
   category: string | null;
   unit: string;
-  package_cost: string;
+  package_cost: string | null;
   package_quantity: string;
-  unit_cost: string;
+  unit_cost: string | null;
   stock_quantity: string;
   reorder_level: string;
   is_low_stock: boolean;
@@ -88,5 +88,5 @@ export interface AdjustMaterialInput {
 }
 
 export const canManageInventory = (role: MembershipRole | null): boolean => role === 'owner' || role === 'admin';
-export const canReceiveInventory = (role: MembershipRole | null): boolean => canManageInventory(role) || role === 'production';
+export const canReceiveInventory = (role: MembershipRole | null): boolean => canManageInventory(role) || role === 'finance';
 export const canRegisterPurchase = (role: MembershipRole | null): boolean => role === 'owner' || role === 'admin' || role === 'finance';

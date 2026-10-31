@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { Alert, Button, EmptyState, Field, Input, Loading, Modal, PageHeader, Select, StatCard, Textarea } from '../../components/ui';
 import { Decimal, decimalString, formatDecimal, parseDecimalInput, STOCK_RESULT_SCALE, UNIT_COST_SCALE, unitCostPreview } from '../../lib/decimal';
 import { formatDate } from '../../lib/format';
+import { canViewFinance } from '../../lib/permissions';
 import { useSession } from '../../app/AuthProvider';
 import {
   useAdjustMaterialMutation,
@@ -29,7 +30,8 @@ const quantity = (value: string | null | undefined) => formatDecimal(value, STOC
 
 function stockValue(materials: MaterialDto[]): Decimal | null {
   try {
-    return materials.reduce((total, material) => total.plus(new Decimal(material.stock_quantity).times(new Decimal(material.unit_cost))), new Decimal(0));
+    if (materials.some((material) => material.unit_cost === null)) return null;
+    return materials.reduce((total, material) => total.plus(new Decimal(material.stock_quantity).times(new Decimal(material.unit_cost!))), new Decimal(0));
   } catch {
     return null;
   }
@@ -57,14 +59,14 @@ function csvCell(value: string | number | null | undefined) {
   return `"${escapedFormula.replace(/"/g, '""')}"`;
 }
 
-function exportMaterials(materials: MaterialDto[], supplierById: Map<string, string>) {
+function exportMaterials(materials: MaterialDto[], supplierById: Map<string, string>, showCost: boolean) {
   const rows = [
-    ['Nome', 'Categoria', 'Unidade', 'Custo unitário', 'Saldo', 'Limite de reposição', 'Fornecedor'],
+    ['Nome', 'Categoria', 'Unidade', ...(showCost ? ['Custo unitário'] : []), 'Saldo', 'Limite de reposição', 'Fornecedor'],
     ...materials.map((material) => [
       material.name,
       material.category ?? '',
       material.unit,
-      money(material.unit_cost),
+      ...(showCost ? [money(material.unit_cost)] : []),
       quantity(material.stock_quantity),
       quantity(material.reorder_level),
       material.supplier_id ? supplierById.get(material.supplier_id) ?? material.supplier_id : '',
@@ -122,7 +124,8 @@ function InventoryWorkspace() {
         && (!to || movementDate <= to);
     });
   }, [historyFrom, historyMaterial, historyTo, historyType, movementsQuery.data]);
-  const totalStockValue = useMemo(() => materialsQuery.isError ? null : stockValue(materials), [materials, materialsQuery.isError]);
+  const showCost = canViewFinance(currentMembershipRole);
+  const totalStockValue = useMemo(() => materialsQuery.isError || !showCost ? null : stockValue(materials), [materials, materialsQuery.isError, showCost]);
   const manageable = canManageInventory(currentMembershipRole);
   const canReceive = canReceiveInventory(currentMembershipRole);
 
@@ -138,7 +141,7 @@ function InventoryWorkspace() {
       <PageHeader
         eyebrow="Estoque & Custos"
         title="Inventário de materiais"
-        description={`Materiais, custos e saldos reais de ${organization?.name ?? 'sua organização'}, protegidos pela sua sessão.`}
+        description={`${showCost ? 'Materiais, custos e saldos' : 'Materiais e saldos'} reais de ${organization?.name ?? 'sua organização'}, protegidos pela sua sessão.`}
         action={manageable ? <Button icon={<Plus size={17} />} onClick={() => openModal('create')}>Cadastrar insumo</Button> : undefined}
       />
       <OrganizationPicker />
@@ -146,7 +149,7 @@ function InventoryWorkspace() {
 
       <div className="stats-grid inventory-stats">
         <StatCard label="Insumos cadastrados" value={materialsQuery.isError ? '—' : String(materials.length)} footnote="registros reais nesta organização" icon={<Archive size={17} />} />
-        <StatCard label="Valor ao custo" value={totalStockValue === null ? '—' : money(totalStockValue)} footnote="saldo atual × custo unitário" icon={<SlidersHorizontal size={17} />} />
+        {showCost && <StatCard label="Valor ao custo" value={totalStockValue === null ? '—' : money(totalStockValue)} footnote="saldo atual × custo unitário" icon={<SlidersHorizontal size={17} />} />}
         <StatCard label="Alertas de reposição" value={materialsQuery.isError ? '—' : String(alertMaterials.length)} footnote="saldo menor ou igual ao limite" icon={<AlertTriangle size={17} />} />
       </div>
 
@@ -158,7 +161,7 @@ function InventoryWorkspace() {
             <button className={tab === 'alerts' ? 'inventory-tab active' : 'inventory-tab'} type="button" role="tab" aria-selected={tab === 'alerts'} onClick={() => setTab('alerts')}>Alertas de reposição <span>{alertMaterials.length}</span></button>
             <button className={tab === 'history' ? 'inventory-tab active' : 'inventory-tab'} type="button" role="tab" aria-selected={tab === 'history'} onClick={() => setTab('history')}>Histórico</button>
           </div>
-          {tab !== 'history' ? <Button variant="secondary" icon={<Download size={16} />} disabled={!filteredMaterials.length} onClick={() => exportMaterials(filteredMaterials, supplierById)}>Exportar CSV</Button> : null}
+          {tab !== 'history' ? <Button variant="secondary" icon={<Download size={16} />} disabled={!filteredMaterials.length} onClick={() => exportMaterials(filteredMaterials, supplierById, showCost)}>Exportar CSV</Button> : null}
         </div>
 
         {tab === 'history' ? (
@@ -184,7 +187,7 @@ function InventoryWorkspace() {
             </div>
             {tab === 'alerts' && !alertMaterials.length ? <EmptyState title="Nenhum alerta de reposição" description="Os alertas aparecem quando o saldo real de um insumo fica menor ou igual ao seu limite configurado." /> : null}
             {tab === 'list' && !materials.length ? <EmptyState title="Nenhum insumo cadastrado" description="O inventário desta organização começa vazio. Cadastre o primeiro insumo com unidade, custo, saldo inicial e limite de reposição." action={manageable ? <Button onClick={() => openModal('create')} icon={<Plus size={16} />}>Cadastrar primeiro insumo</Button> : <Link className="text-link" to="/conta">Confira sua permissão na Conta</Link>} /> : null}
-            {filteredMaterials.length > 0 ? <MaterialTable materials={tab === 'alerts' ? alertMaterials.filter((material) => !normalizedSearch || `${material.name} ${material.category ?? ''}`.toLocaleLowerCase('pt-BR').includes(normalizedSearch)).filter((material) => !categoryFilter || material.category === categoryFilter) : filteredMaterials} supplierById={supplierById} manageable={manageable} canReceive={canReceive} onEdit={(material) => openModal('edit', material)} onReceive={(material) => openModal('receive', material)} onAdjust={(material) => openModal('adjust', material)} /> : null}
+            {filteredMaterials.length > 0 ? <MaterialTable materials={tab === 'alerts' ? alertMaterials.filter((material) => !normalizedSearch || `${material.name} ${material.category ?? ''}`.toLocaleLowerCase('pt-BR').includes(normalizedSearch)).filter((material) => !categoryFilter || material.category === categoryFilter) : filteredMaterials} supplierById={supplierById} showCost={showCost} manageable={manageable} canReceive={canReceive} onEdit={(material) => openModal('edit', material)} onReceive={(material) => openModal('receive', material)} onAdjust={(material) => openModal('adjust', material)} /> : null}
             {materials.length > 0 && !filteredMaterials.length && tab === 'list' ? <EmptyState title="Nenhum resultado para estes filtros" description="Ajuste a busca ou remova o filtro de categoria para consultar os registros reais carregados." /> : null}
             {materials.length > 0 && tab === 'alerts' && alertMaterials.length > 0 && !alertMaterials.some((material) => (!normalizedSearch || `${material.name} ${material.category ?? ''}`.toLocaleLowerCase('pt-BR').includes(normalizedSearch)) && (!categoryFilter || material.category === categoryFilter)) ? <EmptyState title="Nenhum alerta combina com os filtros" description="Os alertas existem, mas não correspondem à busca ou categoria selecionada." /> : null}
           </>
@@ -200,18 +203,18 @@ function InventoryWorkspace() {
   );
 }
 
-function MaterialTable({ materials, supplierById, manageable, canReceive, onEdit, onReceive, onAdjust }: { materials: MaterialDto[]; supplierById: Map<string, string>; manageable: boolean; canReceive: boolean; onEdit: (material: MaterialDto) => void; onReceive: (material: MaterialDto) => void; onAdjust: (material: MaterialDto) => void }) {
+function MaterialTable({ materials, supplierById, showCost, manageable, canReceive, onEdit, onReceive, onAdjust }: { materials: MaterialDto[]; supplierById: Map<string, string>; showCost: boolean; manageable: boolean; canReceive: boolean; onEdit: (material: MaterialDto) => void; onReceive: (material: MaterialDto) => void; onAdjust: (material: MaterialDto) => void }) {
   return (
     <div className="table-scroll">
       <table className="data-table">
         <caption className="sr-only">Materiais cadastrados</caption>
-        <thead><tr><th>Material</th><th>Categoria</th><th>Unidade</th><th>Custo unitário</th><th>Saldo</th><th>Limite</th><th>Fornecedor</th><th>Ações</th></tr></thead>
+        <thead><tr><th>Material</th><th>Categoria</th><th>Unidade</th>{showCost && <th>Custo unitário</th>}<th>Saldo</th><th>Limite</th><th>Fornecedor</th><th>Ações</th></tr></thead>
         <tbody>{materials.map((material) => (
           <tr key={material.id}>
             <th scope="row"><strong>{material.name}</strong>{material.is_low_stock ? <span className="status-text status-warning">Abaixo do limite</span> : null}</th>
             <td>{material.category || '—'}</td>
             <td>{material.unit}</td>
-            <td className="numeric">{money(material.unit_cost)}</td>
+            {showCost && <td className="numeric">{money(material.unit_cost)}</td>}
             <td className="numeric"><span className={material.is_low_stock ? 'stock-low' : ''}>{quantity(material.stock_quantity)}</span></td>
             <td className="numeric">{quantity(material.reorder_level)}</td>
             <td>{material.supplier_id ? supplierById.get(material.supplier_id) ?? 'Fornecedor associado' : '—'}</td>

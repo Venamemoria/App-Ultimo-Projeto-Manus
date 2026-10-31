@@ -12,7 +12,7 @@ export interface MaterialOption {
   organization_id: string;
   name: string;
   unit: string;
-  unit_cost: string;
+  unit_cost: string | null;
   stock_quantity: string;
 }
 
@@ -45,7 +45,7 @@ export interface ProductDto {
   current_version: string;
   inventory_mode: InventoryMode;
   current_composition_cost: string;
-  current_material_cost?: string;
+  current_material_cost?: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -978,11 +978,11 @@ def print_success(suite: str, migrations: list[str], labels: list[str]) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Execute isolated PostgreSQL QA suites")
-    parser.add_argument("--suite", choices=("foundation", "foundation_history", "inventory", "products", "contacts", "orders", "order_returns", "public_sales", "finance_summary", "migration_history", "fractional_precision", "public_capabilities", "financial_ledgers", "recipe_guard", "financial_orders"), default="foundation")
+    parser.add_argument("--suite", choices=("foundation", "foundation_history", "inventory", "products", "contacts", "orders", "order_returns", "public_sales", "finance_summary", "migration_history", "fractional_precision", "public_capabilities", "financial_ledgers", "recipe_guard", "financial_orders", "financial_inventory", "inventory_return_privacy"), default="foundation")
     parser.add_argument("--latest", action="store_true", help="apply all migrations before the selected functional suite")
     parser.add_argument("--stop", action="store_true", help="stop only this marked local cluster after the run")
     args = parser.parse_args()
-    if args.suite in ("fractional_precision", "public_capabilities", "financial_ledgers", "recipe_guard", "financial_orders"):
+    if args.suite in ("fractional_precision", "public_capabilities", "financial_ledgers", "recipe_guard", "financial_orders", "financial_inventory", "inventory_return_privacy"):
         args.latest = True
     try:
         require_paths()
@@ -1025,8 +1025,8 @@ def main() -> int:
             else INVENTORY_TEST if args.suite == "inventory"
             else PRODUCTS_TEST if args.suite == "products"
             else CONTACTS_TEST if args.suite == "contacts"
-            else ORDERS_TEST if args.suite in ("orders", "fractional_precision", "recipe_guard", "financial_orders")
-            else ORDER_RETURNS_TEST if args.suite == "order_returns"
+            else ORDERS_TEST if args.suite in ("orders", "fractional_precision", "recipe_guard", "financial_orders", "financial_inventory")
+            else ORDER_RETURNS_TEST if args.suite in ("order_returns", "inventory_return_privacy")
             else FINANCE_TEST if args.suite in ("finance_summary", "financial_ledgers")
             else PUBLIC_SALES_TEST
         )
@@ -1035,6 +1035,8 @@ def main() -> int:
                  else ROOT / "tests" / "database" / "financial_ledgers.sql" if args.suite == "financial_ledgers"
                  else ROOT / "tests" / "database" / "recipe_guard.sql" if args.suite == "recipe_guard"
                  else ROOT / "tests" / "database" / "financial_orders.sql" if args.suite == "financial_orders"
+                 else ROOT / "tests" / "database" / "financial_inventory.sql" if args.suite == "financial_inventory"
+                 else ROOT / "tests" / "database" / "inventory_return_privacy.sql" if args.suite == "inventory_return_privacy"
                  else None)
         labels = run_migration_history_probe() if args.suite == "migration_history" else run_sql_suite(test_path, extra)
         labels.extend(foundation_labels)

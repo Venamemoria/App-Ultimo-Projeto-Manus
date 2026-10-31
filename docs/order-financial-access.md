@@ -8,7 +8,7 @@ A aplicação mantém a consulta dos pedidos e das receitas operacionais e trata
 
 ## Limites
 
-Esta fatia **não conclui toda a confidencialidade financeira**: produtos, variantes, materiais, movimentos e algumas RPCs de catálogo/recebimento ainda podem expor valores a papéis não financeiros. Além disso, orçamentos públicos continuam mostrando preços a qualquer portador do link válido. A interface atualizada precisa ser publicada; testes locais não comprovam implantação, navegador ou Realtime reais.
+Esta fatia **não conclui toda a confidencialidade financeira**: produtos, variantes e algumas RPCs de catálogo ainda podem expor valores a papéis não financeiros. A fatia posterior de [estoque](inventory-financial-access.md) restringe materiais, movimentos e recebimento. Além disso, orçamentos públicos continuam mostrando preços a qualquer portador do link válido. A interface atualizada precisa ser publicada; testes locais não comprovam implantação, navegador ou Realtime reais.
 
 ## Validação
 
