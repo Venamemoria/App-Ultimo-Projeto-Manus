@@ -978,11 +978,11 @@ def print_success(suite: str, migrations: list[str], labels: list[str]) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Execute isolated PostgreSQL QA suites")
-    parser.add_argument("--suite", choices=("foundation", "foundation_history", "inventory", "products", "contacts", "orders", "order_returns", "public_sales", "finance_summary", "migration_history", "fractional_precision", "public_capabilities"), default="foundation")
+    parser.add_argument("--suite", choices=("foundation", "foundation_history", "inventory", "products", "contacts", "orders", "order_returns", "public_sales", "finance_summary", "migration_history", "fractional_precision", "public_capabilities", "financial_ledgers"), default="foundation")
     parser.add_argument("--latest", action="store_true", help="apply all migrations before the selected functional suite")
     parser.add_argument("--stop", action="store_true", help="stop only this marked local cluster after the run")
     args = parser.parse_args()
-    if args.suite in ("fractional_precision", "public_capabilities"):
+    if args.suite in ("fractional_precision", "public_capabilities", "financial_ledgers"):
         args.latest = True
     try:
         require_paths()
@@ -1027,11 +1027,12 @@ def main() -> int:
             else CONTACTS_TEST if args.suite == "contacts"
             else ORDERS_TEST if args.suite in ("orders", "fractional_precision")
             else ORDER_RETURNS_TEST if args.suite == "order_returns"
-            else FINANCE_TEST if args.suite == "finance_summary"
+            else FINANCE_TEST if args.suite in ("finance_summary", "financial_ledgers")
             else PUBLIC_SALES_TEST
         )
         extra = (ROOT / "tests" / "database" / "fractional_precision.sql" if args.suite == "fractional_precision"
                  else ROOT / "tests" / "database" / "public_capabilities.sql" if args.suite == "public_capabilities"
+                 else ROOT / "tests" / "database" / "financial_ledgers.sql" if args.suite == "financial_ledgers"
                  else None)
         labels = run_migration_history_probe() if args.suite == "migration_history" else run_sql_suite(test_path, extra)
         labels.extend(foundation_labels)

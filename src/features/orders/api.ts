@@ -131,7 +131,7 @@ async function fetchOrderRows<T extends { id?: string; material_id?: string; eve
   throw new Error(`${fallback} O histórico excede o limite seguro; nenhuma lista parcial foi apresentada.`);
 }
 
-export async function fetchOrderBundle(organizationId: string, orderId: string): Promise<OrderBundle> {
+export async function fetchOrderBundle(organizationId: string, orderId: string, includePayments: boolean): Promise<OrderBundle> {
   if (!isUuid(organizationId) || !isUuid(orderId)) throw new Error('Identificador de pedido inválido; nenhuma consulta foi enviada.');
   const orderResult = await client().from('vm_orders_read').select('*').eq('organization_id', organizationId).eq('id', orderId).maybeSingle();
   if (orderResult.error) throw databaseError(orderResult.error, 'Não foi possível carregar o pedido.');
@@ -140,7 +140,7 @@ export async function fetchOrderBundle(organizationId: string, orderId: string):
     fetchOrderRows<OrderItemDto>('vm_order_items_read', organizationId, orderId, 'Não foi possível carregar os itens congelados.', 'id'),
     fetchOrderRows<OrderEventDto>('vm_order_events', organizationId, orderId, 'Não foi possível carregar o histórico do pedido.', 'id'),
     fetchOrderRows<OrderConsumptionDto>('vm_order_consumptions_read', organizationId, orderId, 'Não foi possível carregar o consumo real.', 'material_id'),
-    fetchOrderRows<OrderPaymentDto>('vm_order_payments_read', organizationId, orderId, 'Não foi possível carregar os pagamentos reais.', 'id'),
+    includePayments ? fetchOrderRows<OrderPaymentDto>('vm_order_payments_read', organizationId, orderId, 'Não foi possível carregar os pagamentos reais.', 'id') : Promise.resolve([]),
   ]);
   return {
     order: orderResult.data as OrderDto,
@@ -249,11 +249,11 @@ export function useAllOrdersQuery(organizationId: string | null) {
   });
 }
 
-export function useOrderDetailQuery(organizationId: string | null, orderId: string | null) {
+export function useOrderDetailQuery(organizationId: string | null, orderId: string | null, includePayments: boolean) {
   const valid = Boolean(organizationId && orderId && isUuid(orderId));
   return useQuery({
-    queryKey: valid ? ordersQueryKeys.detail(organizationId!, orderId!) : ['orders', 'detail', 'invalid'],
-    queryFn: () => fetchOrderBundle(organizationId!, orderId!),
+    queryKey: valid ? [...ordersQueryKeys.detail(organizationId!, orderId!), includePayments ? 'financial' : 'operational'] : ['orders', 'detail', 'invalid'],
+    queryFn: () => fetchOrderBundle(organizationId!, orderId!, includePayments),
     enabled: valid,
   });
 }

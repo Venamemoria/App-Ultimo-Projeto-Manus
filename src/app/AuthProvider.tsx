@@ -77,6 +77,8 @@ export function AuthProvider({ children, queryClient }: { children: ReactNode; q
   const [recoveryMode, setRecoveryMode] = useState(false);
   const previousUserId = useRef<string | null>(null);
   const previousOrganizationId = useRef<string | null>(null);
+  const membershipRequestId = useRef(0);
+  const membershipAccess = useRef<string | null>(null);
 
   useEffect(() => {
     if (!supabase) {
@@ -146,34 +148,48 @@ export function AuthProvider({ children, queryClient }: { children: ReactNode; q
     return () => { active = false; };
   }, [initialized, sessionCandidate]);
 
-  const refreshMemberships = useCallback(async () => {
-    if (!supabase || !session?.user.id) {
+  // Memberships can be changed by an administrator while this tab is open.
+  // Refresh periodically and discard cached data when roles or tenants change.
+  const refreshMemberships = useCallback(async (silent = false) => {
+    const userId = session?.user.id;
+    if (!supabase || !userId) {
+      membershipRequestId.current += 1;
       setMemberships([]);
       return;
     }
 
-    setMembershipsLoading(true);
-    const { data, error } = await supabase
-      .from('vm_memberships')
-      .select('id, organization_id, user_id, role, created_at, organization:vm_organizations(id, name)')
-      .eq('user_id', session.user.id)
-      .order('created_at', { ascending: true });
+    const requestId = ++membershipRequestId.current;
+    if (!silent) setMembershipsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('vm_memberships')
+        .select('id, organization_id, user_id, role, created_at, organization:vm_organizations(id, name)')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: true });
+      if (requestId !== membershipRequestId.current || previousUserId.current !== userId) return;
+      if (error) throw error;
 
-    if (previousUserId.current !== session.user.id) return;
-    if (error) {
-      setRuntimeError(`Não foi possível carregar suas organizações: ${error.message}`);
-      setMembershipsLoading(false);
-      return;
+      const normalized = ((data ?? []) as unknown as MembershipRow[]).map((membership) => ({
+        ...membership,
+        organization: Array.isArray(membership.organization) ? membership.organization[0] ?? null : membership.organization,
+      }));
+      const access = normalized.map(({ organization_id, role }) => `${organization_id}:${role}`).sort().join('|');
+      if (membershipAccess.current !== null && membershipAccess.current !== access) queryClient.clear();
+      membershipAccess.current = access;
+      setMemberships(normalized);
+      setRuntimeError(null);
+    } catch (error) {
+      if (requestId !== membershipRequestId.current || previousUserId.current !== userId) return;
+      // Do not keep displaying cached permissions or sensitive values when a
+      // role check fails; a later refresh can restore verified access.
+      queryClient.clear();
+      membershipAccess.current = null;
+      setMemberships([]);
+      setRuntimeError(`Não foi possível confirmar suas organizações: ${errorMessage(error)}`);
+    } finally {
+      if (requestId === membershipRequestId.current && previousUserId.current === userId) setMembershipsLoading(false);
     }
-
-    const normalized = ((data ?? []) as unknown as MembershipRow[]).map((membership) => ({
-      ...membership,
-      organization: Array.isArray(membership.organization) ? membership.organization[0] ?? null : membership.organization,
-    }));
-    setMemberships(normalized);
-    setRuntimeError(null);
-    setMembershipsLoading(false);
-  }, [session?.user.id]);
+  }, [queryClient, session?.user.id]);
 
   useEffect(() => {
     const userId = session?.user.id ?? null;
@@ -182,11 +198,29 @@ export function AuthProvider({ children, queryClient }: { children: ReactNode; q
       queryClient.clear();
       setSelectedOrganizationId(null);
       setMemberships([]);
+      setMembershipsLoading(false);
       previousUserId.current = userId;
       previousOrganizationId.current = null;
+      membershipRequestId.current += 1;
+      membershipAccess.current = null;
     }
     if (userId) void refreshMemberships();
   }, [queryClient, refreshMemberships, session?.user.id]);
+
+  useEffect(() => {
+    if (!session?.user.id) return;
+    const revalidate = () => {
+      if (document.visibilityState === 'visible') void refreshMemberships(true);
+    };
+    window.addEventListener('focus', revalidate);
+    document.addEventListener('visibilitychange', revalidate);
+    const timer = window.setInterval(revalidate, 30_000);
+    return () => {
+      window.removeEventListener('focus', revalidate);
+      document.removeEventListener('visibilitychange', revalidate);
+      window.clearInterval(timer);
+    };
+  }, [refreshMemberships, session?.user.id]);
 
   useEffect(() => {
     if (previousOrganizationId.current && selectedOrganizationId && previousOrganizationId.current !== selectedOrganizationId) {

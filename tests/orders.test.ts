@@ -4,6 +4,7 @@ import { decimalQuantity, orderReturnRpcParams } from '../src/features/orders/re
 import { Decimal, formatDecimal, STOCK_RESULT_SCALE } from '../src/lib/decimal';
 import { canTransition } from '../src/features/orders/types';
 import { isIsoDate, ordersCsv, shiftMonth } from '../src/features/orders/utils';
+import { canViewFinance } from '../src/lib/permissions';
 import type { ProductDto, ProductEditSnapshot } from '../src/features/products/types';
 
 const product: ProductDto = {
@@ -54,6 +55,12 @@ describe('preview puro de pedidos', () => {
 });
 
 describe('regras puras de fluxo', () => {
+  it('mantém proprietário, administração e financeiro e nega produção e visualização', () => {
+    expect(['owner', 'admin', 'finance'].map((role) => canViewFinance(role as 'owner' | 'admin' | 'finance'))).toEqual([true, true, true]);
+    expect(canViewFinance('production')).toBe(false);
+    expect(canViewFinance('viewer')).toBe(false);
+    expect(canViewFinance(null)).toBe(false);
+  });
   it('aceita apenas transições backend válidas', () => {
     expect(canTransition('Pendente', 'Em Produção')).toBe(true);
     expect(canTransition('Em Produção', 'Pendente')).toBe(false);
@@ -68,7 +75,13 @@ describe('regras puras de fluxo', () => {
   });
 
   it('exporta somente os pedidos recebidos pela consulta real', () => {
-    const csv = ordersCsv([{ id: '44444444-4444-4444-8444-444444444444', organization_id: product.organization_id, code: 'PED-1', client_id: '55555555-5555-4555-8555-555555555555', client_name: 'Cliente real', client_name_snapshot: 'Cliente real', title: 'Pedido real', status: 'Pendente', status_version: '1', order_date: '2026-02-28', production_date: null, delivery_date: null, responsible_membership_id: null, public_notes: null, internal_notes: null, subtotal: '10.00', discount_type: 'none', discount_value: '0', discount_amount: '0.00', shipping_amount: '0.00', total_amount: '10.00', paid_amount: '0.00', balance_amount: '10.00', currency: 'BRL', inventory_deducted: false, consumed_at: null, item_count: '1', created_by: null, created_at: '2026-02-28T12:00:00Z', updated_at: '2026-02-28T12:00:00Z' }]);
+    const order = { id: '44444444-4444-4444-8444-444444444444', organization_id: product.organization_id, code: 'PED-1', client_id: '55555555-5555-4555-8555-555555555555', client_name: 'Cliente real', client_name_snapshot: 'Cliente real', title: 'Pedido real', status: 'Pendente', status_version: '1', order_date: '2026-02-28', production_date: null, delivery_date: null, responsible_membership_id: null, public_notes: null, internal_notes: null, subtotal: '10.00', discount_type: 'none', discount_value: '0', discount_amount: '0.00', shipping_amount: '0.00', total_amount: '10.00', paid_amount: '0.00', balance_amount: '10.00', currency: 'BRL', inventory_deducted: false, consumed_at: null, item_count: '1', created_by: null, created_at: '2026-02-28T12:00:00Z', updated_at: '2026-02-28T12:00:00Z' } as const;
+    const csv = ordersCsv([order], true);
+    const operational = ordersCsv([order], false);
+    expect(operational).toContain('PED-1');
+    expect(operational).not.toMatch(/Subtotal|Desconto|Frete|Total|Recebido|Saldo|Moeda|10,00/);
+    expect(csv).toContain('Total');
+    expect(csv).toContain('10,00');
     expect(csv).toContain('PED-1');
     expect(csv).not.toContain('demo');
   });

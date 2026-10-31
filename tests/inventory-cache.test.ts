@@ -29,7 +29,8 @@ describe('atualização de estoque por organização', () => {
   it('invalida listas e detalhe do pedido e o estoque, inclusive sem resposta do RPC', async () => {
     const queryClient = new QueryClient();
     const keys = [ordersQueryKeys.all('a'), ordersQueryKeys.page('a', filters, null),
-      ordersQueryKeys.detail('a', 'o'), inventoryQueryKeys.materials('a'), inventoryQueryKeys.movements('a')];
+      ordersQueryKeys.detail('a', 'o'), [...ordersQueryKeys.detail('a', 'o'), 'financial'],
+      [...ordersQueryKeys.detail('a', 'o'), 'operational'], inventoryQueryKeys.materials('a'), inventoryQueryKeys.movements('a')];
     const other = ordersQueryKeys.detail('b', 'o');
     [...keys, other].forEach((key) => queryClient.setQueryData(key, 'cached'));
     await invalidateAfterOrderMutation(queryClient, 'a', 'o');

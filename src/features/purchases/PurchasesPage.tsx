@@ -40,7 +40,8 @@ function shortId(id: string | null) {
 }
 
 export function PurchasesPage() {
-  const { organizationId } = useSession();
+  const { organizationId, currentMembershipRole } = useSession();
+  if (!canRegisterPurchase(currentMembershipRole)) return <><PageHeader eyebrow="Compras" title="Acesso restrito"/><Alert kind="warning">Compras e pagamentos são acessíveis somente ao proprietário, à administração e ao financeiro.</Alert></>;
   return <OrganizationContext><PurchasesWorkspace key={organizationId ?? 'none'} /></OrganizationContext>;
 }
 
