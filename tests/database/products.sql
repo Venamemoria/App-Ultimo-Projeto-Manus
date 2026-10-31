@@ -79,12 +79,18 @@ SELECT pg_temp.assert_true((SELECT count(*) FROM qa_orgs)=2,'products fixtures c
 SELECT pg_temp.assert_true((SELECT unit_cost FROM qa_material_a)=4.00000000::numeric,'fixture unit cost is exact');
 SELECT pg_temp.pass_test('local products fixtures and exact fractional material cost');
 
--- Read DTOs, textual numerics, security_invoker and grants.
+-- The original views use security_invoker; migration 06000 deliberately
+-- replaces the four sensitive projections with membership-checked barriers.
 SELECT pg_temp.assert_true(
- (SELECT count(*) FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
-  WHERE n.nspname='public' AND c.relname IN ('vm_products_read','vm_product_components_read','vm_product_versions_read','vm_product_variants_read','vm_product_files_read')
-  AND c.relkind='v' AND 'security_invoker=true'=ANY(c.reloptions))=5,
- 'all Products read views use security_invoker');
+ CASE WHEN pg_catalog.to_regprocedure('public.vm_update_product_operations(uuid,uuid,integer,jsonb,text,uuid)') IS NULL THEN
+  (SELECT count(*) FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
+   WHERE n.nspname='public' AND c.relname IN ('vm_products_read','vm_product_components_read','vm_product_versions_read','vm_product_variants_read','vm_product_files_read')
+   AND c.relkind='v' AND 'security_invoker=true'=ANY(c.reloptions))=5
+ ELSE
+  (SELECT bool_and(reloptions @> ARRAY['security_invoker=false','security_barrier=true']) FROM pg_catalog.pg_class
+   WHERE oid IN ('public.vm_products_read'::regclass,'public.vm_product_components_read'::regclass,'public.vm_product_versions_read'::regclass,'public.vm_product_variants_read'::regclass))
+  AND (SELECT 'security_invoker=true'=ANY(reloptions) FROM pg_catalog.pg_class WHERE oid='public.vm_product_files_read'::regclass)
+ END, 'product views use the intended security mode for this migration level');
 SELECT pg_temp.assert_true(
  (SELECT count(*) FROM information_schema.columns
   WHERE table_schema='public' AND table_name IN ('vm_products_read','vm_product_components_read','vm_product_versions_read','vm_product_variants_read','vm_product_files_read')
@@ -175,7 +181,7 @@ SELECT pg_temp.assert_true((SELECT count(*) FROM public.vm_products_read WHERE o
 SELECT pg_temp.assert_raises('cross tenant Product mutation forbidden','42501',format($$SELECT * FROM public.vm_upsert_product_v2('%s','Cross tenant','cat','[]'::jsonb,NULL,NULL,NULL,NULL,0,'unit',1,NULL,1,'unit',false,false,'[]'::jsonb,NULL,NULL,NULL,NULL,NULL,NULL,'[]'::jsonb,'[]'::jsonb,'[]'::jsonb,'%s','20000000-0000-0000-0000-000000000018'::uuid)$$,(SELECT organization_id FROM qa_orgs WHERE user_id=(SELECT user_a FROM qa_identity)),(SELECT product_id FROM qa_product_v1)));
 SELECT pg_temp.pass_test('cross tenant Product read and mutation isolation');
 
--- A finance membership is a real role but cannot mutate this product catalog.
+-- Finance is denied by the original product contract, but can edit the full catalog after migration 06000.
 RESET ROLE;
 INSERT INTO public.vm_memberships(organization_id,user_id,role)
 VALUES ((SELECT organization_id FROM qa_orgs WHERE user_id=(SELECT user_a FROM qa_identity)),(SELECT user_b FROM qa_identity),'finance');
@@ -183,8 +189,17 @@ SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub',(SELECT user_b::text FROM qa_identity),true);
 SELECT set_config('request.jwt.claim.role','authenticated',true);
 SELECT set_config('request.jwt.claims',json_build_object('sub',(SELECT user_b::text FROM qa_identity),'role','finance')::text,true);
-SELECT pg_temp.assert_raises('finance cannot mutate Product catalog','42501',format($$SELECT * FROM public.vm_upsert_product_v2('%s','Finance attempt','cat','[]'::jsonb,NULL,NULL,NULL,NULL,0,'unit',1,NULL,1,'unit',false,false,'[]'::jsonb,NULL,NULL,NULL,NULL,NULL,NULL,'[]'::jsonb,'[]'::jsonb,'[]'::jsonb,NULL,'20000000-0000-0000-0000-000000000019'::uuid)$$,(SELECT organization_id FROM qa_orgs WHERE user_id=(SELECT user_a FROM qa_identity))));
-SELECT pg_temp.pass_test('finance role cannot mutate Product catalog');
+DO $test$
+BEGIN
+ IF pg_catalog.to_regprocedure('public.vm_update_product_operations(uuid,uuid,integer,jsonb,text,uuid)') IS NULL THEN
+  PERFORM pg_temp.assert_raises('finance cannot mutate original Product catalog','42501',format($$SELECT * FROM public.vm_upsert_product_v2('%s','Finance attempt','cat','[]'::jsonb,NULL,NULL,NULL,NULL,0,'unit',1,NULL,1,'unit',false,false,'[]'::jsonb,NULL,NULL,NULL,NULL,NULL,NULL,'[]'::jsonb,'[]'::jsonb,'[]'::jsonb,NULL,'20000000-0000-0000-0000-000000000019'::uuid)$$,(SELECT organization_id FROM qa_orgs WHERE user_id=(SELECT user_a FROM qa_identity))));
+ ELSE
+  PERFORM pg_temp.assert_true((SELECT normal_price::numeric=1 FROM public.vm_upsert_product_v2(
+   (SELECT organization_id FROM qa_orgs WHERE user_id=(SELECT user_a FROM qa_identity)), 'Finance attempt','cat','[]'::jsonb,NULL,NULL,NULL,NULL,0,'unit',1,NULL,1,'unit',false,false,'[]'::jsonb,NULL,NULL,NULL,NULL,NULL,NULL,'[]'::jsonb,'[]'::jsonb,'[]'::jsonb,NULL,'20000000-0000-0000-0000-000000000019'::uuid)), 'finance can edit financial catalog after migration 06000');
+ END IF;
+END;
+$test$;
+SELECT pg_temp.pass_test('finance catalog permission follows installed migration');
 
 -- Storage bucket/policies are private and path-safe. This SQL object insert is
 -- only a local policy fixture, not a real upload or production call.

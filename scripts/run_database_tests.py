@@ -699,6 +699,65 @@ def run_orders_concurrency_probe() -> list[str]:
     return ["real two-connection status serialization"]
 
 
+def run_product_operation_concurrency_probe() -> list[str]:
+    """Race actual production RPCs on the marked local cluster, never Supabase."""
+    with connect(DB_NAME) as conn:
+        if not marker_is_valid(conn):
+            raise RuntimeError("PRODUCT_OPERATION_RACE_DATABASE_NOT_MARKED")
+        rows = conn.execute("""
+          SELECT p.organization_id,p.id,p.current_version,p.inventory_mode,p.description,p.material_info,
+                 p.personalization_info,p.production_days,v.composition_snapshot,v.variants_snapshot,p.price,p.promo_price
+          FROM public.vm_products p JOIN public.vm_product_versions v
+            ON v.organization_id=p.organization_id AND v.product_id=p.id AND v.product_version=p.current_version
+          WHERE p.sku='ORD-VAR'
+        """).fetchall()
+        if len(rows) != 1:
+            raise RuntimeError("PRODUCT_OPERATION_RACE_FIXTURE_MISSING_OR_AMBIGUOUS")
+    org, product, current, mode, desc, material_info, personalization_info, days, components, variants, price, promo = rows[0]
+    def sanitize_components(items):
+        return [{key: item[key] for key in ("material_id", "quantity", "unit")} for item in items]
+    data = {
+        "description": desc, "material_info": material_info, "personalization_info": personalization_info,
+        "production_days": days, "components": sanitize_components(components),
+        "variants": [{"id": v["id"], "composition_mode": v["composition_mode"],
+                      "components": sanitize_components(v["components"]) if v["composition_mode"] == "own" else []}
+                     for v in variants],
+    }
+    def race(version, keys):
+        barrier = Barrier(2)
+        def attempt(key):
+            with connect(DB_NAME) as conn:
+                try:
+                    conn.execute("SET ROLE authenticated")
+                    conn.execute("SELECT set_config('request.jwt.claim.sub', %s, false)", (AUTH_USER_B,))
+                    conn.execute("SELECT set_config('request.jwt.claim.role', 'authenticated', false)")
+                    conn.execute("SELECT set_config('request.jwt.claims', %s, false)",
+                                 (json.dumps({"sub": AUTH_USER_B, "role": "authenticated"}),))
+                    barrier.wait(timeout=10)
+                    result = conn.execute("SELECT product_id,version FROM public.vm_update_product_operations(%s,%s,%s,%s::jsonb,%s,%s)",
+                                          (org, product, version, json.dumps(data), mode, key)).fetchone()
+                    conn.commit()
+                    return ("ok", result[0], result[1])
+                except psycopg.Error as exc:
+                    conn.rollback()
+                    return ("error", exc.sqlstate)
+        with ThreadPoolExecutor(max_workers=2, thread_name_prefix="product-ops-qa") as pool:
+            return list(pool.map(attempt, keys))
+    same_key = "40000000-0000-0000-0000-000000000970"
+    same = race(current, (same_key, same_key))
+    if any(row[0] != "ok" or row[1] != product or int(row[2]) != current + 1 for row in same):
+        raise RuntimeError("PRODUCT_OPERATION_REPLAY_RACE_FAILED")
+    different = race(current + 1, ("40000000-0000-0000-0000-000000000971", "40000000-0000-0000-0000-000000000972"))
+    if sorted(row[0] for row in different) != ["error", "ok"] or next(row for row in different if row[0] == "error")[1] != "40001":
+        raise RuntimeError("PRODUCT_OPERATION_STALE_RACE_FAILED")
+    with connect(DB_NAME) as conn:
+        check = conn.execute("SELECT current_version,price,promo_price FROM public.vm_products WHERE organization_id=%s AND id=%s", (org, product)).fetchone()
+        request_count = conn.execute("SELECT count(*) FROM vm_private.vm_product_operation_requests WHERE organization_id=%s AND idempotency_key=%s", (org, same_key)).fetchone()[0]
+    if check != (current + 2, price, promo) or request_count != 1:
+        raise RuntimeError("PRODUCT_OPERATION_RACE_CHANGED_PRICE_OR_DUPLICATED_REQUEST")
+    return ["two-session operational replay and stale-version races"]
+
+
 def run_public_sales_concurrency_probe() -> list[str]:
     """Race two anonymous local sessions against the committed QA quote."""
     # Refuse to use a similarly named quote unless the exact marked local DB,
@@ -978,11 +1037,11 @@ def print_success(suite: str, migrations: list[str], labels: list[str]) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Execute isolated PostgreSQL QA suites")
-    parser.add_argument("--suite", choices=("foundation", "foundation_history", "inventory", "products", "contacts", "orders", "order_returns", "public_sales", "finance_summary", "migration_history", "fractional_precision", "public_capabilities", "financial_ledgers", "recipe_guard", "financial_orders", "financial_inventory", "inventory_return_privacy"), default="foundation")
+    parser.add_argument("--suite", choices=("foundation", "foundation_history", "inventory", "products", "contacts", "orders", "order_returns", "public_sales", "finance_summary", "migration_history", "fractional_precision", "public_capabilities", "financial_ledgers", "recipe_guard", "financial_orders", "financial_inventory", "inventory_return_privacy", "financial_products"), default="foundation")
     parser.add_argument("--latest", action="store_true", help="apply all migrations before the selected functional suite")
     parser.add_argument("--stop", action="store_true", help="stop only this marked local cluster after the run")
     args = parser.parse_args()
-    if args.suite in ("fractional_precision", "public_capabilities", "financial_ledgers", "recipe_guard", "financial_orders", "financial_inventory", "inventory_return_privacy"):
+    if args.suite in ("fractional_precision", "public_capabilities", "financial_ledgers", "recipe_guard", "financial_orders", "financial_inventory", "inventory_return_privacy", "financial_products"):
         args.latest = True
     try:
         require_paths()
@@ -1025,7 +1084,7 @@ def main() -> int:
             else INVENTORY_TEST if args.suite == "inventory"
             else PRODUCTS_TEST if args.suite == "products"
             else CONTACTS_TEST if args.suite == "contacts"
-            else ORDERS_TEST if args.suite in ("orders", "fractional_precision", "recipe_guard", "financial_orders", "financial_inventory")
+            else ORDERS_TEST if args.suite in ("orders", "fractional_precision", "recipe_guard", "financial_orders", "financial_inventory", "financial_products")
             else ORDER_RETURNS_TEST if args.suite in ("order_returns", "inventory_return_privacy")
             else FINANCE_TEST if args.suite in ("finance_summary", "financial_ledgers")
             else PUBLIC_SALES_TEST
@@ -1037,9 +1096,12 @@ def main() -> int:
                  else ROOT / "tests" / "database" / "financial_orders.sql" if args.suite == "financial_orders"
                  else ROOT / "tests" / "database" / "financial_inventory.sql" if args.suite == "financial_inventory"
                  else ROOT / "tests" / "database" / "inventory_return_privacy.sql" if args.suite == "inventory_return_privacy"
+                 else ROOT / "tests" / "database" / "financial_products.sql" if args.suite == "financial_products"
                  else None)
         labels = run_migration_history_probe() if args.suite == "migration_history" else run_sql_suite(test_path, extra)
         labels.extend(foundation_labels)
+        if args.suite == "financial_products":
+            labels.extend(run_product_operation_concurrency_probe())
         if args.suite in ("orders", "fractional_precision"):
             labels.extend(run_orders_concurrency_probe())
         if args.suite in ("public_sales", "public_capabilities"):

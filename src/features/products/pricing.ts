@@ -20,8 +20,9 @@ export interface PriceResolution {
   billingUnit: 'unit' | 'm2';
 }
 
-function validMoney(value: string, label: string): Decimal {
+function validMoney(value: string | null | undefined, label: string): Decimal {
   try {
+    if (value == null) throw new Error('Preço indisponível.');
     return parseDecimalInput(value, { scale: 8 });
   } catch {
     throw new Error(`${label} inválido.`);

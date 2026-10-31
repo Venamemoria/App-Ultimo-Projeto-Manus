@@ -103,7 +103,9 @@ export function previewProductPricing(input: PricingPreviewInput): PricingPrevie
     source = 'override';
     label = 'Preço manual informado; o servidor preservará o motivo e o catálogo aplicável';
   } else {
-    const normal = decimal(variant?.price ?? version.price, 'Preço catalogado');
+    const normalPrice = variant ? variant.price : version.price;
+    if (normalPrice == null) throw new Error('Preço do catálogo indisponível para esta permissão.');
+    const normal = decimal(normalPrice, 'Preço catalogado');
     const promoText = variant?.promo_price ?? version.promo_price;
     const promo = promoText ? decimal(promoText, 'Preço promocional') : null;
     if (promo && promo.gt(normal)) throw new Error('O preço promocional vigente é inválido.');

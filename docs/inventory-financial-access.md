@@ -8,7 +8,7 @@ A interface atualizada oculta os custos de inventário e fornecedores de papéis
 
 ## Limites
 
-A proteção financeira do ERP ainda não é completa: tabelas, snapshots e RPCs de produtos/variantes ainda podem revelar preços e custos a papéis não financeiros. Um orçamento público válido mostra preço a qualquer portador de seu link. Não considerar a ocultação da interface como prova de confidencialidade total. Não foi feita navegação E2E ou validação real de entrega Realtime; a consulta ativa de estoque revalida no foco e a cada 30 segundos.
+A proteção financeira do ERP ainda não é completa: a proteção posterior de [produtos e variantes](product-financial-access.md) cobre seus campos estruturados, mas textos livres e anexos podem conter valores. Um orçamento público válido mostra preço a qualquer portador de seu link. Não considerar a ocultação da interface como prova de confidencialidade total. Não foi feita navegação E2E ou validação real de entrega Realtime; a consulta ativa de estoque revalida no foco e a cada 30 segundos.
 
 ## Verificação
 
