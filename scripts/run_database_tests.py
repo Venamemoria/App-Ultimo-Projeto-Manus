@@ -14,9 +14,11 @@ import argparse
 from concurrent.futures import ThreadPoolExecutor
 import json
 import os
+from queue import Queue
 import subprocess
 import sys
 from threading import Barrier
+from time import monotonic, sleep
 from pathlib import Path
 from typing import Iterable
 
@@ -782,6 +784,181 @@ def run_public_sales_concurrency_probe() -> list[str]:
     return ["real two-connection anonymous quote-approval race; one order, acceptance, initial event and notification set; no material deduction"]
 
 
+def run_capability_revocation_races() -> list[str]:
+    """Verify real lock serialization, exclusively in the marked local DB."""
+    preflight_local_database()
+    with connect(DB_NAME) as conn:
+        if not marker_is_valid(conn):
+            raise RuntimeError("CAPABILITY_RACE_DATABASE_NOT_MARKED")
+        rows = conn.execute(
+            """SELECT q.title,q.organization_id,q.id,q.public_token,a.order_id,t.token,t.id
+               FROM public.vm_quotes q
+               LEFT JOIN vm_private.vm_quote_acceptances a ON a.organization_id=q.organization_id AND a.quote_id=q.id
+               LEFT JOIN public.vm_tracking_capabilities t ON t.organization_id=a.organization_id AND t.id=a.tracking_id
+               WHERE q.title IN ('QA capability race_revoke','QA capability race_read','QA capability race_track',
+                                 'QA capability race_track_reverse','QA capability race_expiry')"""
+        ).fetchall()
+        targets = {row[0]: row[1:] for row in rows}
+        if len(targets) != 5:
+            raise RuntimeError("CAPABILITY_RACE_FIXTURES_MISSING")
+
+    def admin(conn):
+        conn.execute("SET ROLE authenticated")
+        conn.execute("SELECT set_config('request.jwt.claim.sub', %s, false)", (AUTH_USER_A,))
+        conn.execute("SELECT set_config('request.jwt.claim.role', 'authenticated', false)")
+        conn.execute("SELECT set_config('request.jwt.claims', %s, false)",
+                     (json.dumps({"sub": AUTH_USER_A, "role": "authenticated"}),))
+
+    def anon(conn):
+        conn.execute("SET ROLE anon")
+        conn.execute("SELECT set_config('request.jwt.claim.role', 'anon', false)")
+
+    def wait_blocked(pid: int):
+        deadline = monotonic() + 8
+        with connect(DB_NAME) as monitor:
+            monitor.autocommit = True
+            while monotonic() < deadline:
+                blocked = monitor.execute(
+                    "SELECT wait_event_type='Lock' AND cardinality(pg_blocking_pids(pid))>0 "
+                    "FROM pg_stat_activity WHERE pid=%s", (pid,),
+                ).fetchone()
+                if blocked and blocked[0]:
+                    return
+                sleep(0.025)
+        raise RuntimeError("CAPABILITY_RACE_EXPECTED_ROW_LOCK_WAIT")
+
+    def approve_after_lock(token, pids: Queue):
+        with connect(DB_NAME) as conn:
+            anon(conn)
+            pids.put(conn.execute("SELECT pg_backend_pid()").fetchone()[0])
+            try:
+                result = conn.execute("SELECT order_id,tracking_token FROM public.vm_approve_quote(%s)", (token,)).fetchone()
+                conn.commit()
+                return result
+            except psycopg.Error as exc:
+                conn.rollback()
+                return exc.sqlstate
+
+    def read_after_lock(token, pids: Queue):
+        with connect(DB_NAME) as conn:
+            anon(conn)
+            pids.put(conn.execute("SELECT pg_backend_pid()").fetchone()[0])
+            result = conn.execute("SELECT public.vm_get_quote(%s)", (token,)).fetchone()[0]
+            conn.commit()
+            return result
+
+    def revoke_after_lock(org, tracking_token, pids: Queue):
+        with connect(DB_NAME) as conn:
+            admin(conn)
+            pids.put(conn.execute("SELECT pg_backend_pid()").fetchone()[0])
+            result = conn.execute("SELECT tracking_id FROM public.vm_revoke_tracking(%s,%s,gen_random_uuid())",
+                                  (org,tracking_token)).fetchone()
+            conn.commit()
+            return result
+
+    labels = []
+    # The transaction that owns the quote lock revokes first; an approval
+    # already waiting for it must observe the committed revocation.
+    org, quote_id, token, _, _, _ = targets['QA capability race_revoke']
+    with connect(DB_NAME) as writer, ThreadPoolExecutor(max_workers=1) as pool:
+        admin(writer)
+        writer.execute("SELECT * FROM public.vm_revoke_quote(%s,%s,'teste local',gen_random_uuid())", (org,quote_id))
+        pids = Queue()
+        future = pool.submit(approve_after_lock, token, pids)
+        wait_blocked(pids.get(timeout=5))
+        writer.commit()
+        if future.result(timeout=10) != '22023':
+            raise RuntimeError("QUOTE_REVOKE_RACE_DISCLOSED_OR_ACCEPTED")
+    with connect(DB_NAME) as conn:
+        count = conn.execute("SELECT count(*) FROM vm_private.vm_quote_acceptances WHERE quote_id=%s", (quote_id,)).fetchone()[0]
+        if count:
+            raise RuntimeError("QUOTE_REVOKE_RACE_CREATED_ACCEPTANCE")
+    labels.append("quote revocation commits before blocked anonymous approval; no order")
+
+    # The public getter serializes against the same quote row; a reader
+    # already queued behind an uncommitted revocation cannot receive snapshots.
+    org, quote_id, token, _, _, _ = targets['QA capability race_read']
+    with connect(DB_NAME) as writer, ThreadPoolExecutor(max_workers=1) as pool:
+        admin(writer)
+        writer.execute("SELECT * FROM public.vm_revoke_quote(%s,%s,'teste local',gen_random_uuid())", (org,quote_id))
+        pids = Queue()
+        future = pool.submit(read_after_lock, token, pids)
+        wait_blocked(pids.get(timeout=5))
+        writer.commit()
+        if future.result(timeout=10) is not None:
+            raise RuntimeError("QUOTE_REVOKE_RACE_READ_LEAKED_SNAPSHOT")
+    labels.append("quote revocation commits before blocked public read; no snapshot leaked")
+
+    # A revocation holding the original tracking row wins over a blocked replay.
+    org, quote_id, token, order_id, tracking_token, _ = targets['QA capability race_track']
+    with connect(DB_NAME) as writer, ThreadPoolExecutor(max_workers=1) as pool:
+        admin(writer)
+        writer.execute("SELECT * FROM public.vm_revoke_tracking(%s,%s,gen_random_uuid())", (org,tracking_token))
+        pids = Queue()
+        future = pool.submit(approve_after_lock, token, pids)
+        wait_blocked(pids.get(timeout=5))
+        writer.commit()
+        if future.result(timeout=10) != '22023':
+            raise RuntimeError("TRACKING_REVOKE_RACE_DISCLOSED_TOKEN")
+    with connect(DB_NAME) as conn:
+        count = conn.execute("SELECT count(*) FROM public.vm_tracking_capabilities WHERE order_id=%s", (order_id,)).fetchone()[0]
+        if count != 1:
+            raise RuntimeError("TRACKING_REVOKE_RACE_REISSUED")
+    labels.append("tracking revocation wins over blocked replay without reissuing")
+
+    # Conversely, replay's FOR SHARE makes the valid read linearize before a
+    # concurrent revocation, which cannot commit until that read commits.
+    org, quote_id, token, order_id, tracking_token, _ = targets['QA capability race_track_reverse']
+    with connect(DB_NAME) as reader, ThreadPoolExecutor(max_workers=1) as pool:
+        anon(reader)
+        result = reader.execute("SELECT order_id,tracking_token FROM public.vm_approve_quote(%s)", (token,)).fetchone()
+        if result != (order_id,tracking_token):
+            raise RuntimeError("TRACKING_REPLAY_RACE_INITIAL_RESULT")
+        pids = Queue()
+        future = pool.submit(revoke_after_lock, org, tracking_token, pids)
+        wait_blocked(pids.get(timeout=5))
+        reader.commit()
+        if not future.result(timeout=10):
+            raise RuntimeError("TRACKING_REPLAY_RACE_REVOCATION_FAILED")
+    with connect(DB_NAME) as conn:
+        anon(conn)
+        try:
+            conn.execute("SELECT * FROM public.vm_approve_quote(%s)", (token,))
+        except psycopg.Error as exc:
+            if exc.sqlstate != '22023':
+                raise
+        else:
+            raise RuntimeError("TRACKING_REPLAY_AFTER_REVOCATION_ALLOWED")
+    labels.append("valid replay holds shared tracking lock until commit; later revocation blocks and takes effect")
+
+    # Expiry may occur while a previously-valid replay waits on a row lock.
+    # Shorten only a marked local fixture, retain the DB CHECK, and wait until
+    # the server clock actually crosses its deadline before releasing the lock.
+    _, _, token, _, tracking_token, tracking_id = targets['QA capability race_expiry']
+    with connect(DB_NAME) as conn:
+        conn.execute("ALTER TABLE public.vm_tracking_capabilities DISABLE TRIGGER vm_tracking_guard")
+        conn.execute("UPDATE public.vm_tracking_capabilities SET created_at=clock_timestamp()-interval '1 day', expires_at=clock_timestamp()+interval '2 seconds' WHERE id=%s", (tracking_id,))
+        conn.execute("ALTER TABLE public.vm_tracking_capabilities ENABLE TRIGGER vm_tracking_guard")
+        conn.commit()
+    with connect(DB_NAME) as locker, ThreadPoolExecutor(max_workers=1) as pool:
+        locker.execute("SELECT id FROM public.vm_tracking_capabilities WHERE id=%s FOR UPDATE", (tracking_id,))
+        pids = Queue()
+        future = pool.submit(approve_after_lock, token, pids)
+        wait_blocked(pids.get(timeout=5))
+        deadline = monotonic() + 8
+        while monotonic() < deadline:
+            if locker.execute("SELECT clock_timestamp()>=expires_at FROM public.vm_tracking_capabilities WHERE id=%s", (tracking_id,)).fetchone()[0]:
+                break
+            sleep(0.025)
+        else:
+            raise RuntimeError("TRACKING_EXPIRY_TEST_CLOCK_DID_NOT_ADVANCE")
+        locker.commit()
+        if future.result(timeout=10) != '22023':
+            raise RuntimeError("TRACKING_EXPIRY_WHILE_BLOCKED_DISCLOSED_TOKEN")
+    labels.append("tracking expiry while blocked on a row lock is rechecked before replay")
+    return labels
+
+
 def print_success(suite: str, migrations: list[str], labels: list[str]) -> None:
     status = {
         "status": "passed",
@@ -801,11 +978,11 @@ def print_success(suite: str, migrations: list[str], labels: list[str]) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Execute isolated PostgreSQL QA suites")
-    parser.add_argument("--suite", choices=("foundation", "foundation_history", "inventory", "products", "contacts", "orders", "order_returns", "public_sales", "finance_summary", "migration_history", "fractional_precision"), default="foundation")
+    parser.add_argument("--suite", choices=("foundation", "foundation_history", "inventory", "products", "contacts", "orders", "order_returns", "public_sales", "finance_summary", "migration_history", "fractional_precision", "public_capabilities"), default="foundation")
     parser.add_argument("--latest", action="store_true", help="apply all migrations before the selected functional suite")
     parser.add_argument("--stop", action="store_true", help="stop only this marked local cluster after the run")
     args = parser.parse_args()
-    if args.suite == "fractional_precision":
+    if args.suite in ("fractional_precision", "public_capabilities"):
         args.latest = True
     try:
         require_paths()
@@ -853,13 +1030,17 @@ def main() -> int:
             else FINANCE_TEST if args.suite == "finance_summary"
             else PUBLIC_SALES_TEST
         )
-        extra = ROOT / "tests" / "database" / "fractional_precision.sql" if args.suite == "fractional_precision" else None
+        extra = (ROOT / "tests" / "database" / "fractional_precision.sql" if args.suite == "fractional_precision"
+                 else ROOT / "tests" / "database" / "public_capabilities.sql" if args.suite == "public_capabilities"
+                 else None)
         labels = run_migration_history_probe() if args.suite == "migration_history" else run_sql_suite(test_path, extra)
         labels.extend(foundation_labels)
         if args.suite in ("orders", "fractional_precision"):
             labels.extend(run_orders_concurrency_probe())
-        if args.suite == "public_sales":
+        if args.suite in ("public_sales", "public_capabilities"):
             labels.extend(run_public_sales_concurrency_probe())
+        if args.suite == "public_capabilities":
+            labels.extend(run_capability_revocation_races())
         print_success(args.suite, migrations, labels)
         if args.stop:
             stop_cluster()
