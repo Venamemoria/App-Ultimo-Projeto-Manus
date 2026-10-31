@@ -15,6 +15,8 @@ const db = () => { if (!supabase) throw new Error(supabaseConfigError ?? 'Servi�
 const rows = <T,>(value: unknown): T[] => Array.isArray(value) ? value as T[] : value && typeof value === 'object' ? [value as T] : [];
 function safeError(error: { code?: string; message?: string } | null): never {
   const code = error?.code;
+  if (code === 'VM002') throw new Error('A classificação sem estoque está inconsistente com a composição de insumos. Revise o produto antes de emitir o orçamento.');
+  if (code === 'VM001') throw new Error('Produto sem composição de insumos. Cadastre a receita no produto ou na variação antes de emitir o orçamento.');
   if (code === '42501') throw new Error('Você não tem permissão para esta ação.');
   if (code === '22023' || code === '23503') throw new Error('Os dados informados são inválidos ou o registro não está disponível.');
   if (code === '23505') throw new Error('Esta solicitação já foi processada ou conflita com uma operação anterior.');

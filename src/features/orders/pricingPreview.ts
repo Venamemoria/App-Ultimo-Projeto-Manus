@@ -75,6 +75,12 @@ function checkedQuantity(value: Decimal, label: string, scale: number, positive 
 export function previewProductPricing(input: PricingPreviewInput): PricingPreview {
   const version = checkedProductVersion(input);
   const variant = activeVariant(input, version);
+  const recipe = variant?.composition_mode === 'own' ? variant.components : version.composition_snapshot;
+  const noStock = input.snapshot?.product.inventory_mode === 'no_stock';
+  if (!noStock && (!Array.isArray(recipe) || recipe.length === 0)) {
+    throw new Error('Produto sem composição de insumos. Cadastre a receita no produto ou na variação antes de continuar.');
+  }
+  if (noStock && Array.isArray(recipe) && recipe.length > 0) throw new Error('Produto sem consumo de estoque não pode ter composição ativa de insumos.');
   const quantity = decimal(input.quantity, 'Quantidade', true);
   let factor = new Decimal(1);
   if (version.billing_unit === 'm2') {

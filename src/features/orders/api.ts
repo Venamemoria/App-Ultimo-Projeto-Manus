@@ -43,6 +43,8 @@ function rows<T>(data: unknown): T[] {
 function databaseError(error: { code?: string | null } | null, fallback: string): Error {
   if (!error) return new Error(fallback);
   switch (error.code) {
+    case 'VM002': return new Error('A classificação sem estoque está inconsistente com a composição. Solicite a revisão ou recriação do pedido.');
+    case 'VM001': return new Error('Produto sem composição de insumos. Cadastre a receita antes de criar pedidos ou orçamentos; pedidos antigos precisam ser revisados ou recriados com composição.');
     case '42501': return new Error('Seu papel, sua sessão ou sua organização não autoriza esta operação.');
     case '22023': return new Error('O pedido contém um campo, status, data ou regra inválida.');
     case '22003': return new Error('Um decimal excede a precisão permitida. Revise quantidades e valores sem alterar a tentativa pendente.');

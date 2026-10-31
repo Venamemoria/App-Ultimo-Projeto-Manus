@@ -39,6 +39,7 @@ function rows<T>(data: unknown): T[] {
 
 function publicDatabaseError(error: { code?: string | null; message?: string | null } | null, fallback: string): Error {
   if (!error) return new Error(fallback);
+  if (error.code === 'VM002') return new Error('Um produto sem consumo de estoque não pode ter composição ativa de insumos. Remova a receita ou escolha consumo de materiais.');
   if (error.code === '42501') return new Error('Seu papel não permite alterar produtos nesta organização.');
   if (error.code === '23505') return new Error('Já existe um produto, SKU, código de barras ou tentativa com estes dados. Se a operação ficou pendente, tente novamente sem mudar o formulário.');
   if (error.code === '23503') return new Error('O produto, organização, material ou arquivo não está disponível nesta organização.');
@@ -204,7 +205,8 @@ export function productRpcParams(input: ProductUpsertInput): Record<string, unkn
 }
 
 export async function upsertProduct(input: ProductUpsertInput): Promise<ProductUpsertResult> {
-  return callRpc<ProductUpsertResult>('vm_upsert_product_v2', productRpcParams(input), 'Não foi possível salvar o produto.');
+  const { p_organization_id, p_idempotency_key, ...p_data } = productRpcParams(input);
+  return callRpc<ProductUpsertResult>('vm_upsert_product_v3', { p_organization_id, p_idempotency_key, p_data, p_inventory_mode: input.values.inventoryMode }, 'Não foi possível salvar o produto.');
 }
 
 function fileExtension(file: File): string {

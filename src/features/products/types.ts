@@ -1,5 +1,6 @@
 import type { MembershipRole } from '../../lib/types';
 
+export type InventoryMode = 'materials' | 'no_stock';
 export type PricingMode = 'unit' | 'variation' | 'm2';
 export type BillingUnit = 'unit' | 'm2';
 export type CompositionMode = 'inherit_base' | 'own';
@@ -42,6 +43,7 @@ export interface ProductDto {
   barcode: string | null;
   wholesale_tiers: WholesaleTier[];
   current_version: string;
+  inventory_mode: InventoryMode;
   current_composition_cost: string;
   current_material_cost?: string;
   created_at: string;
@@ -157,6 +159,7 @@ export interface ProductFormValues {
   personalizationInfo: string;
   productionDays: string;
   pricingMode: PricingMode;
+  inventoryMode: InventoryMode;
   price: string;
   promoPrice: string;
   minimumQuantity: string;
@@ -221,6 +224,7 @@ export const emptyFormValues = (): ProductFormValues => ({
   personalizationInfo: '',
   productionDays: '0',
   pricingMode: 'unit',
+  inventoryMode: 'materials',
   price: '',
   promoPrice: '',
   minimumQuantity: '1',
@@ -250,6 +254,7 @@ export function formValuesFromSnapshot(snapshot: ProductEditSnapshot): ProductFo
     personalizationInfo: version.personalization_info ?? '',
     productionDays: version.production_days,
     pricingMode: version.pricing_mode,
+    inventoryMode: product.inventory_mode ?? 'materials',
     price: version.price,
     promoPrice: version.promo_price ?? '',
     minimumQuantity: version.minimum_quantity,
