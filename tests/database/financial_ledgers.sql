@@ -83,7 +83,9 @@ SELECT pg_temp.assert_true((SELECT count(*)=0 FROM public.vm_cash_entries_read W
 RESET ROLE;
 SELECT pg_temp.assert_true(NOT has_table_privilege('anon','public.vm_cash_entries','SELECT') AND NOT has_table_privilege('anon','public.vm_order_payments','SELECT')
   AND NOT has_table_privilege('anon','public.vm_material_purchases','SELECT'),'anonymous has no direct ledger grants');
-SELECT pg_temp.assert_true((SELECT reloptions @> ARRAY['security_invoker=true'] FROM pg_class WHERE oid='public.vm_orders_read'::regclass)
+SELECT pg_temp.assert_true((SELECT CASE WHEN EXISTS (SELECT 1 FROM public.vm_schema_migrations WHERE version='20261031004000_order_financial_snapshots')
+    THEN reloptions @> ARRAY['security_invoker=false','security_barrier=true']
+    ELSE reloptions @> ARRAY['security_invoker=true'] END FROM pg_class WHERE oid='public.vm_orders_read'::regclass)
   AND has_table_privilege('authenticated','public.vm_orders_read','SELECT') AND NOT has_table_privilege('anon','public.vm_orders_read','SELECT'),
-  'order view retains invoker mode and original API grants');
-SELECT pg_temp.pass_test('viewer and anonymous denied financial ledgers; invoker ACL preserved');
+  'order view uses the reviewed security mode for its schema version and original API grants');
+SELECT pg_temp.pass_test('viewer and anonymous denied financial ledgers; order-view ACL preserved');

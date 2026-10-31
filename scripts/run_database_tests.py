@@ -320,7 +320,7 @@ def bootstrap_roles_auth_and_users() -> None:
     with connect(DB_NAME) as conn:
         conn.autocommit = True
         # Cluster roles are local test identities, not application users.
-        for role in ("anon", "authenticated"):
+        for role in ("anon", "authenticated", "service_role"):
             row = conn.execute("SELECT rolsuper FROM pg_roles WHERE rolname = %s", (role,)).fetchone()
             if row is not None:
                 if row[0]:
@@ -332,9 +332,9 @@ def bootstrap_roles_auth_and_users() -> None:
         conn.execute(helper_sql, prepare=False)
         conn.execute("CREATE TABLE auth.users (id uuid PRIMARY KEY)")
         conn.execute("REVOKE ALL ON SCHEMA auth FROM PUBLIC")
-        conn.execute("GRANT USAGE ON SCHEMA auth TO anon, authenticated")
+        conn.execute("GRANT USAGE ON SCHEMA auth TO anon, authenticated, service_role")
         conn.execute("REVOKE ALL ON TABLE auth.users FROM PUBLIC, anon, authenticated")
-        conn.execute("GRANT EXECUTE ON FUNCTION auth.uid(), auth.role(), auth.jwt() TO anon, authenticated")
+        conn.execute("GRANT EXECUTE ON FUNCTION auth.uid(), auth.role(), auth.jwt() TO anon, authenticated, service_role")
         conn.execute("INSERT INTO auth.users (id) VALUES (%s), (%s)", (AUTH_USER_A, AUTH_USER_B))
         count = conn.execute("SELECT count(*) FROM auth.users").fetchone()[0]
         if count != 2:
@@ -978,11 +978,11 @@ def print_success(suite: str, migrations: list[str], labels: list[str]) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Execute isolated PostgreSQL QA suites")
-    parser.add_argument("--suite", choices=("foundation", "foundation_history", "inventory", "products", "contacts", "orders", "order_returns", "public_sales", "finance_summary", "migration_history", "fractional_precision", "public_capabilities", "financial_ledgers", "recipe_guard"), default="foundation")
+    parser.add_argument("--suite", choices=("foundation", "foundation_history", "inventory", "products", "contacts", "orders", "order_returns", "public_sales", "finance_summary", "migration_history", "fractional_precision", "public_capabilities", "financial_ledgers", "recipe_guard", "financial_orders"), default="foundation")
     parser.add_argument("--latest", action="store_true", help="apply all migrations before the selected functional suite")
     parser.add_argument("--stop", action="store_true", help="stop only this marked local cluster after the run")
     args = parser.parse_args()
-    if args.suite in ("fractional_precision", "public_capabilities", "financial_ledgers", "recipe_guard"):
+    if args.suite in ("fractional_precision", "public_capabilities", "financial_ledgers", "recipe_guard", "financial_orders"):
         args.latest = True
     try:
         require_paths()
@@ -1025,7 +1025,7 @@ def main() -> int:
             else INVENTORY_TEST if args.suite == "inventory"
             else PRODUCTS_TEST if args.suite == "products"
             else CONTACTS_TEST if args.suite == "contacts"
-            else ORDERS_TEST if args.suite in ("orders", "fractional_precision", "recipe_guard")
+            else ORDERS_TEST if args.suite in ("orders", "fractional_precision", "recipe_guard", "financial_orders")
             else ORDER_RETURNS_TEST if args.suite == "order_returns"
             else FINANCE_TEST if args.suite in ("finance_summary", "financial_ledgers")
             else PUBLIC_SALES_TEST
@@ -1034,6 +1034,7 @@ def main() -> int:
                  else ROOT / "tests" / "database" / "public_capabilities.sql" if args.suite == "public_capabilities"
                  else ROOT / "tests" / "database" / "financial_ledgers.sql" if args.suite == "financial_ledgers"
                  else ROOT / "tests" / "database" / "recipe_guard.sql" if args.suite == "recipe_guard"
+                 else ROOT / "tests" / "database" / "financial_orders.sql" if args.suite == "financial_orders"
                  else None)
         labels = run_migration_history_probe() if args.suite == "migration_history" else run_sql_suite(test_path, extra)
         labels.extend(foundation_labels)
