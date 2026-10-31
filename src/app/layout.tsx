@@ -5,6 +5,7 @@ import { Alert, Button } from '../components/ui';
 import { initials } from '../lib/format';
 import { useSession } from './AuthProvider';
 import { NotificationBell } from '../features/notifications/Bell';
+import { canViewFinance } from '../lib/permissions';
 
 const roleLabels = {
   owner: 'proprietário',
@@ -53,7 +54,7 @@ export function AppLayout() {
           <NavLink className={navClass} to="/" end><LayoutDashboard size={18} aria-hidden="true" /> <span>Painel</span></NavLink>
           <div className="context-label">Estoque &amp; Custos</div>
           <NavLink className={navClass} to="/estoque"><PackageSearch size={18} aria-hidden="true" /> <span>Inventário</span></NavLink>
-          <NavLink className={navClass} to="/compras"><ReceiptText size={18} aria-hidden="true" /> <span>Registro de compras</span></NavLink>
+          {canViewFinance(currentMembershipRole) && <NavLink className={navClass} to="/compras"><ReceiptText size={18} aria-hidden="true" /> <span>Registro de compras</span></NavLink>}
           <NavLink className={navClass} to="/produtos"><PackagePlus size={18} aria-hidden="true" /> <span>Produtos</span></NavLink>
           <div className="context-label">Relacionamento</div>
           <NavLink className={navClass} to="/clientes"><UsersRound size={18} aria-hidden="true" /> <span>Clientes</span></NavLink>

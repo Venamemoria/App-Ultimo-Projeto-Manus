@@ -8,13 +8,15 @@ import { QUOTE_PAGE_SIZE } from './pagination';
 export type QuoteStatus = 'Sent' | 'Expired' | 'Revoked' | 'Approved';
 export interface QuoteListRow { quote_id: string; public_token: string; status: QuoteStatus; title: string; client_name_snapshot: string; total_amount: string; valid_until: string; created_at: string; }
 export interface QuoteItem { kind: 'product' | 'manual_service'; title: string; quantity: string; billing_unit: string; dimensions: { width_cm: string; height_cm: string } | null; unit_price: string; line_amount: string; product: { name: string; category: string | null; sku: string | null; variant_name: string | null; variant_sku: string | null } | null }
-export interface PublicQuote { brand: string; quote_token: string; title: string; items: QuoteItem[]; subtotal: string; discount_type: 'none' | 'fixed' | 'percent'; discount_value: string; discount_amount: string; shipping_amount: string; total_amount: string; currency: string; order_date: string; production_date: string | null; delivery_date: string | null; valid_until: string; terms: string | null; public_notes: string | null; status: QuoteStatus; accepted_at: string | null }
+export interface PublicQuote { brand: string; quote_token: string; title: string; items: QuoteItem[]; subtotal: string; discount_type: 'none' | 'fixed' | 'percent'; discount_value: string; discount_amount: string; shipping_amount: string; total_amount: string; currency: string; order_date: string; production_date: string | null; delivery_date: string | null; valid_until: string; terms: string | null; public_notes: string | null; status: QuoteStatus; accepted_at: string | null; tracking_available: boolean }
 export interface Tracking { brand: string; code: string; title: string; status: string; status_version: string; order_date: string; production_date: string | null; delivery_date: string | null; expires_at: string; history: { status: string; status_version: string; created_at: string }[] }
 export interface AdminQuote { quote_id: string; status: QuoteStatus; valid_until: string; terms: string | null; data: Record<string, unknown>; items: Record<string, unknown>[] }
 const db = () => { if (!supabase) throw new Error(supabaseConfigError ?? 'Serviço temporariamente indisponível.'); return supabase; };
 const rows = <T,>(value: unknown): T[] => Array.isArray(value) ? value as T[] : value && typeof value === 'object' ? [value as T] : [];
 function safeError(error: { code?: string; message?: string } | null): never {
   const code = error?.code;
+  if (code === 'VM002') throw new Error('A classificação sem estoque está inconsistente com a composição de insumos. Revise o produto antes de emitir o orçamento.');
+  if (code === 'VM001') throw new Error('Produto sem composição de insumos. Cadastre a receita no produto ou na variação antes de emitir o orçamento.');
   if (code === '42501') throw new Error('Você não tem permissão para esta ação.');
   if (code === '22023' || code === '23503') throw new Error('Os dados informados são inválidos ou o registro não está disponível.');
   if (code === '23505') throw new Error('Esta solicitação já foi processada ou conflita com uma operação anterior.');

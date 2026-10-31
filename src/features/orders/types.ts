@@ -1,4 +1,5 @@
 import type { MembershipRole } from '../../lib/types';
+import { canViewFinance } from '../../lib/permissions';
 import type { ProductDto, ProductEditSnapshot, VariantSnapshot } from '../products/types';
 import type { ClientDto } from '../contacts/types';
 
@@ -25,14 +26,14 @@ export interface OrderDto {
   responsible_membership_id: string | null;
   public_notes: string | null;
   internal_notes: string | null;
-  subtotal: string;
-  discount_type: DiscountType;
-  discount_value: string;
-  discount_amount: string;
-  shipping_amount: string;
-  total_amount: string;
-  paid_amount: string;
-  balance_amount: string;
+  subtotal: string | null;
+  discount_type: DiscountType | null;
+  discount_value: string | null;
+  discount_amount: string | null;
+  shipping_amount: string | null;
+  total_amount: string | null;
+  paid_amount: string | null;
+  balance_amount: string | null;
   currency: 'BRL';
   inventory_deducted: boolean;
   consumed_at: string | null;
@@ -49,9 +50,9 @@ export interface OrderRecipeSnapshot {
   material_name: string;
   quantitySnapshot: string;
   unit: string;
-  unit_cost_snapshot: string;
+  unit_cost_snapshot?: string;
   consumption_quantity: string;
-  consumption_cost: string;
+  consumption_cost?: string;
 }
 
 export interface OrderItemDto {
@@ -70,16 +71,16 @@ export interface OrderItemDto {
   dimensions: OrderDimensions | null;
   dimensions_factor: string;
   billed_quantity: string;
-  unit_price: string;
-  price_source: 'catalog' | 'override' | 'manual';
+  unit_price: string | null;
+  price_source: 'catalog' | 'override' | 'manual' | null;
   price_override_reason: string | null;
-  line_amount_raw: string;
-  line_amount: string;
+  line_amount_raw: string | null;
+  line_amount: string | null;
   recipe_mode: 'base' | 'inherit_base' | 'own' | 'none';
-  unit_composition_cost: string;
-  total_composition_cost: string;
+  unit_composition_cost: string | null;
+  total_composition_cost: string | null;
   product_snapshot: Record<string, unknown>;
-  price_snapshot: Record<string, unknown>;
+  price_snapshot: Record<string, unknown> | null;
   recipe_snapshot: OrderRecipeSnapshot[];
   details: string | null;
   personalization: Record<string, unknown> | null;
@@ -275,7 +276,7 @@ export const canStartConsumingOrder = (role: MembershipRole | null): boolean => 
 export const canSetProductionStage = (role: MembershipRole | null): boolean => role === 'owner' || role === 'admin' || role === 'production';
 export const canCancelBeforeConsumption = (role: MembershipRole | null): boolean => role === 'owner' || role === 'admin' || role === 'finance';
 export const canCancelAfterConsumption = (role: MembershipRole | null): boolean => role === 'owner' || role === 'admin';
-export const canRecordPayment = (role: MembershipRole | null): boolean => role === 'owner' || role === 'admin' || role === 'finance';
+export const canRecordPayment = canViewFinance;
 
 export const statusTransitions: Record<OrderStatus, OrderStatus[]> = {
   Pendente: ['Em Produção', 'Concluído', 'Cancelado'],

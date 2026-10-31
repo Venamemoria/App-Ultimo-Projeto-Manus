@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase, supabaseConfigError } from '../../lib/supabase';
+import { useSession } from '../../app/AuthProvider';
+import { canViewFinance } from '../../lib/permissions';
 import { Decimal, decimalString, parseDecimalInput } from '../../lib/decimal';
 import type { MaterialDto } from '../inventory/types';
 import type {
@@ -10,6 +12,8 @@ import type {
   ProductFileUploadInput,
   ProductFormValues,
   ProductUpsertInput,
+  ProductOperationsInput,
+  ProductOperationsResult,
   ProductUpsertResult,
   ProductVariantDto,
   ProductVersionDto,
@@ -39,7 +43,9 @@ function rows<T>(data: unknown): T[] {
 
 function publicDatabaseError(error: { code?: string | null; message?: string | null } | null, fallback: string): Error {
   if (!error) return new Error(fallback);
+  if (error.code === 'VM002') return new Error('Um produto sem consumo de estoque não pode ter composição ativa de insumos. Remova a receita ou escolha consumo de materiais.');
   if (error.code === '42501') return new Error('Seu papel não permite alterar produtos nesta organização.');
+  if (error.code === '40001') return new Error('O produto mudou desde a abertura. Feche e recarregue antes de editar novamente.');
   if (error.code === '23505') return new Error('Já existe um produto, SKU, código de barras ou tentativa com estes dados. Se a operação ficou pendente, tente novamente sem mudar o formulário.');
   if (error.code === '23503') return new Error('O produto, organização, material ou arquivo não está disponível nesta organização.');
   if (error.code === '23514') return new Error('A unidade da composição, o preço ou outro valor não passou nas regras do banco.');
@@ -112,7 +118,7 @@ export async function fetchProducts(organizationId: string): Promise<ProductDto[
     ...product,
     categories: Array.isArray(product.categories) ? product.categories : [],
     custom_questions: Array.isArray(product.custom_questions) ? product.custom_questions : [],
-    wholesale_tiers: Array.isArray(product.wholesale_tiers) ? product.wholesale_tiers : [],
+    wholesale_tiers: Array.isArray(product.wholesale_tiers) ? product.wholesale_tiers : null,
     ...(photoByProduct.get(product.id)?.signed_url ? { thumbnail_url: photoByProduct.get(product.id)?.signed_url } : {}),
   })) as ProductDto[];
 }
@@ -153,7 +159,7 @@ function variantPayload(variant: VariantSnapshot) {
   const payload: Record<string, unknown> = {
     name: variant.name.trim(),
     sku: variant.sku?.trim() || null,
-    price: decimalParam(variant.price, 'Preço da variação'),
+    price: decimalParam(variant.price ?? '', 'Preço da variação'),
     promo_price: variant.promo_price?.trim() ? decimalParam(variant.promo_price, 'Preço promocional da variação') : null,
     active: variant.active,
     minimum_quantity: variant.minimum_quantity?.trim() ? decimalParam(variant.minimum_quantity, 'Quantidade mínima da variação', true) : null,
@@ -204,7 +210,52 @@ export function productRpcParams(input: ProductUpsertInput): Record<string, unkn
 }
 
 export async function upsertProduct(input: ProductUpsertInput): Promise<ProductUpsertResult> {
-  return callRpc<ProductUpsertResult>('vm_upsert_product_v2', productRpcParams(input), 'Não foi possível salvar o produto.');
+  const { p_organization_id, p_idempotency_key, ...p_data } = productRpcParams(input);
+  return callRpc<ProductUpsertResult>('vm_upsert_product_v3', { p_organization_id, p_idempotency_key, p_data, p_inventory_mode: input.values.inventoryMode }, 'Não foi possível salvar o produto.');
+}
+
+// Explicit allowlist: neither live nor frozen financial fields are sent by
+// the operational editor. The RPC rechecks membership and preserves prices.
+export function productOperationsRpcParams(input: ProductOperationsInput): Record<string, unknown> {
+  const expectedVersion = Number(input.expectedVersion);
+  const productionDays = Number(input.productionDays);
+  if (!Number.isSafeInteger(expectedVersion) || expectedVersion < 1) throw new Error('Versão do produto inválida; recarregue.');
+  if (!/^\d+$/.test(input.productionDays.trim()) || !Number.isInteger(productionDays) || productionDays < 0 || productionDays > 10000) throw new Error('Dias de produção deve ser um inteiro entre 0 e 10.000.');
+  const components = (items: ProductOperationsInput['components']) => items.map((component) => ({
+    material_id: component.material_id, quantity: decimalParam(component.quantity, 'Quantidade da composição', true), unit: component.unit,
+  }));
+  if (input.variants.some((variant) => !variant.id)) throw new Error('Uma variação não está identificada; recarregue o produto.');
+  return {
+    p_organization_id: input.organizationId,
+    p_product_id: input.productId,
+    p_expected_version: expectedVersion,
+    p_idempotency_key: input.idempotencyKey,
+    p_inventory_mode: input.inventoryMode,
+    p_data: {
+      description: input.description || null,
+      material_info: input.materialInfo || null,
+      personalization_info: input.personalizationInfo || null,
+      production_days: productionDays,
+      components: components(input.components),
+      variants: input.variants.map((variant) => ({ id: variant.id, composition_mode: variant.composition_mode,
+        components: variant.composition_mode === 'own' ? components(variant.components) : [] })),
+    },
+  };
+}
+
+export async function updateProductOperations(input: ProductOperationsInput): Promise<ProductOperationsResult> {
+  return callRpc<ProductOperationsResult>('vm_update_product_operations', productOperationsRpcParams(input), 'Não foi possível salvar os dados de produção.');
+}
+
+export function useProductOperationsMutation(organizationId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({ mutationFn: updateProductOperations, onSettled: async (_result, _error, input) => {
+    if (!organizationId) return;
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: productsQueryKeys.all(organizationId) }),
+      queryClient.invalidateQueries({ queryKey: productsQueryKeys.detail(organizationId, input.productId) }),
+    ]);
+  } });
 }
 
 function fileExtension(file: File): string {
@@ -251,15 +302,21 @@ export async function registerExistingProductFile(input: Omit<ProductFileUploadI
 }
 
 export function useProductsQuery(organizationId: string | null) {
-  return useQuery({ queryKey: organizationId ? productsQueryKeys.all(organizationId) : ['products', 'all', 'no-organization'], queryFn: () => fetchProducts(organizationId!), enabled: Boolean(organizationId) });
+  const { currentMembershipRole } = useSession();
+  const scope = canViewFinance(currentMembershipRole) ? 'financial' : 'operational';
+  return useQuery({ queryKey: organizationId ? [...productsQueryKeys.all(organizationId), scope] : ['products', 'all', 'no-organization'], queryFn: () => fetchProducts(organizationId!), enabled: Boolean(organizationId && currentMembershipRole), refetchOnWindowFocus: 'always', refetchInterval: 30_000 });
 }
 
 export function useProductMaterialsQuery(organizationId: string | null) {
-  return useQuery({ queryKey: organizationId ? productsQueryKeys.materials(organizationId) : ['products', 'materials', 'no-organization'], queryFn: () => fetchMaterialsForProducts(organizationId!), enabled: Boolean(organizationId) });
+  const { currentMembershipRole } = useSession();
+  const scope = canViewFinance(currentMembershipRole) ? 'financial' : 'operational';
+  return useQuery({ queryKey: organizationId ? [...productsQueryKeys.materials(organizationId), scope] : ['products', 'materials', 'no-organization'], queryFn: () => fetchMaterialsForProducts(organizationId!), enabled: Boolean(organizationId && currentMembershipRole), refetchOnWindowFocus: 'always', refetchInterval: 30_000 });
 }
 
 export function useProductDetailQuery(organizationId: string | null, productId: string | null) {
-  return useQuery({ queryKey: organizationId && productId ? productsQueryKeys.detail(organizationId, productId) : ['products', 'detail', 'none'], queryFn: () => fetchProductDetail(organizationId!, productId!), enabled: Boolean(organizationId && productId) });
+  const { currentMembershipRole } = useSession();
+  const scope = canViewFinance(currentMembershipRole) ? 'financial' : 'operational';
+  return useQuery({ queryKey: organizationId && productId ? [...productsQueryKeys.detail(organizationId, productId), scope] : ['products', 'detail', 'none'], queryFn: () => fetchProductDetail(organizationId!, productId!), enabled: Boolean(organizationId && productId && currentMembershipRole), refetchOnWindowFocus: 'always' });
 }
 
 export function useUpsertProductMutation(organizationId: string | null) {

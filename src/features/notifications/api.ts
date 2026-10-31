@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { supabase, supabaseConfigError } from '../../lib/supabase';
 import type { RealtimeStatus } from '../orders/types';
+import { invalidateStockQueries } from '../inventory/cache';
 
 export interface NotificationDto {
   id: string;
@@ -62,14 +63,22 @@ export function useNotificationsRealtime(organizationId: string | null, userId: 
     }
     let active = true;
     const key = notificationQueryKeys.all(organizationId, userId);
-    const refresh = () => { void queryClient.invalidateQueries({ queryKey: key }); };
+    const refresh = () => { if (active) void queryClient.invalidateQueries({ queryKey: key }); };
+    const refreshOrderStock = () => {
+      if (!active) return;
+      refresh();
+      // Order events are already published without prices or costs. Re-read
+      // stock under RLS instead of trusting a realtime payload as the balance.
+      void invalidateStockQueries(queryClient, organizationId);
+    };
     const realtimeClient = supabase;
     const channel = realtimeClient.channel(`orders-notifications:${organizationId}:${userId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'vm_notifications', filter: `organization_id=eq.${organizationId}` }, refresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'vm_order_events', filter: `organization_id=eq.${organizationId}` }, refresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'vm_order_events', filter: `organization_id=eq.${organizationId}` }, refreshOrderStock)
       .subscribe((subscriptionStatus) => {
         if (!active) return;
         setStatus(subscriptionStatus === 'SUBSCRIBED' ? 'connected' : 'reconnecting');
+        if (subscriptionStatus === 'SUBSCRIBED') void invalidateStockQueries(queryClient, organizationId);
       });
     return () => {
       active = false;

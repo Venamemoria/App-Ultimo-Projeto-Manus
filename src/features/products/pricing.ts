@@ -1,4 +1,4 @@
-import { Decimal, decimalString, parseDecimalInput } from '../../lib/decimal';
+import { COMPOSITION_COST_SCALE, Decimal, QUANTITY_MAX, UNIT_COST_SCALE, decimalString, parseDecimalInput } from '../../lib/decimal';
 import type { PricingMode, ProductComponent, VariantSnapshot, WholesaleTier } from './types';
 
 export interface PriceResolutionInput {
@@ -20,8 +20,9 @@ export interface PriceResolution {
   billingUnit: 'unit' | 'm2';
 }
 
-function validMoney(value: string, label: string): Decimal {
+function validMoney(value: string | null | undefined, label: string): Decimal {
   try {
+    if (value == null) throw new Error('Preço indisponível.');
     return parseDecimalInput(value, { scale: 8 });
   } catch {
     throw new Error(`${label} inválido.`);
@@ -85,12 +86,15 @@ export function resolveProductPrice(input: PriceResolutionInput): PriceResolutio
 }
 
 export function compositionCost(components: ProductComponent[], materialUnitCosts: Map<string, string>): string {
-  return decimalString(components.reduce((total, component) => {
+  const total = components.reduce((sum, component) => {
     const cost = materialUnitCosts.get(component.material_id);
-    if (!cost) return total;
+    if (!cost) return sum;
     const quantity = parseDecimalInput(component.quantity, { positive: true });
-    return total.plus(quantity.times(validMoney(cost, 'Custo unitário')));
-  }, new Decimal(0)).toDecimalPlaces(8));
+    const unitCost = parseDecimalInput(cost, { scale: UNIT_COST_SCALE });
+    return sum.plus(quantity.times(unitCost));
+  }, new Decimal(0));
+  if (total.gt(QUANTITY_MAX) || total.decimalPlaces() > COMPOSITION_COST_SCALE) throw new Error('Custo da composição excede a precisão permitida.');
+  return total.toFixed();
 }
 
 export function validateWholesaleTiers(tiers: WholesaleTier[]): string | null {

@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase, supabaseConfigError } from '../../lib/supabase';
 import { fetchContacts } from '../contacts/api';
+import { invalidateAfterOrderMutation, ordersQueryKeys } from './cache';
+export { ordersQueryKeys } from './cache';
 import type { ClientDto } from '../contacts/types';
 import { fetchProductDetail, fetchProducts } from '../products/api';
 import type {
@@ -27,13 +29,6 @@ import { decimalAtScale, isUuid, moneyAtTwoDecimals } from './utils';
 const PAGE_SIZE = 40;
 const MAX_PAGES = 1000;
 
-export const ordersQueryKeys = {
-  page: (organizationId: string, filters: OrderListFilters, cursor: string | null) => ['orders', 'page', organizationId, filters, cursor] as const,
-  all: (organizationId: string) => ['orders', 'all', organizationId] as const,
-  detail: (organizationId: string, orderId: string) => ['orders', 'detail', organizationId, orderId] as const,
-  catalog: (organizationId: string) => ['orders', 'catalog', organizationId] as const,
-};
-
 function client() {
   if (!supabase) throw new Error(supabaseConfigError ?? 'O serviço de dados está indisponível neste ambiente.');
   return supabase;
@@ -48,6 +43,8 @@ function rows<T>(data: unknown): T[] {
 function databaseError(error: { code?: string | null } | null, fallback: string): Error {
   if (!error) return new Error(fallback);
   switch (error.code) {
+    case 'VM002': return new Error('A classificação sem estoque está inconsistente com a composição. Solicite a revisão ou recriação do pedido.');
+    case 'VM001': return new Error('Produto sem composição de insumos. Cadastre a receita antes de criar pedidos ou orçamentos; pedidos antigos precisam ser revisados ou recriados com composição.');
     case '42501': return new Error('Seu papel, sua sessão ou sua organização não autoriza esta operação.');
     case '22023': return new Error('O pedido contém um campo, status, data ou regra inválida.');
     case '22003': return new Error('Um decimal excede a precisão permitida. Revise quantidades e valores sem alterar a tentativa pendente.');
@@ -136,7 +133,7 @@ async function fetchOrderRows<T extends { id?: string; material_id?: string; eve
   throw new Error(`${fallback} O histórico excede o limite seguro; nenhuma lista parcial foi apresentada.`);
 }
 
-export async function fetchOrderBundle(organizationId: string, orderId: string): Promise<OrderBundle> {
+export async function fetchOrderBundle(organizationId: string, orderId: string, includePayments: boolean): Promise<OrderBundle> {
   if (!isUuid(organizationId) || !isUuid(orderId)) throw new Error('Identificador de pedido inválido; nenhuma consulta foi enviada.');
   const orderResult = await client().from('vm_orders_read').select('*').eq('organization_id', organizationId).eq('id', orderId).maybeSingle();
   if (orderResult.error) throw databaseError(orderResult.error, 'Não foi possível carregar o pedido.');
@@ -145,7 +142,7 @@ export async function fetchOrderBundle(organizationId: string, orderId: string):
     fetchOrderRows<OrderItemDto>('vm_order_items_read', organizationId, orderId, 'Não foi possível carregar os itens congelados.', 'id'),
     fetchOrderRows<OrderEventDto>('vm_order_events', organizationId, orderId, 'Não foi possível carregar o histórico do pedido.', 'id'),
     fetchOrderRows<OrderConsumptionDto>('vm_order_consumptions_read', organizationId, orderId, 'Não foi possível carregar o consumo real.', 'material_id'),
-    fetchOrderRows<OrderPaymentDto>('vm_order_payments_read', organizationId, orderId, 'Não foi possível carregar os pagamentos reais.', 'id'),
+    includePayments ? fetchOrderRows<OrderPaymentDto>('vm_order_payments_read', organizationId, orderId, 'Não foi possível carregar os pagamentos reais.', 'id') : Promise.resolve([]),
   ]);
   return {
     order: orderResult.data as OrderDto,
@@ -254,11 +251,11 @@ export function useAllOrdersQuery(organizationId: string | null) {
   });
 }
 
-export function useOrderDetailQuery(organizationId: string | null, orderId: string | null) {
+export function useOrderDetailQuery(organizationId: string | null, orderId: string | null, includePayments: boolean) {
   const valid = Boolean(organizationId && orderId && isUuid(orderId));
   return useQuery({
-    queryKey: valid ? ordersQueryKeys.detail(organizationId!, orderId!) : ['orders', 'detail', 'invalid'],
-    queryFn: () => fetchOrderBundle(organizationId!, orderId!),
+    queryKey: valid ? [...ordersQueryKeys.detail(organizationId!, orderId!), includePayments ? 'financial' : 'operational'] : ['orders', 'detail', 'invalid'],
+    queryFn: () => fetchOrderBundle(organizationId!, orderId!, includePayments),
     enabled: valid,
   });
 }
@@ -271,33 +268,23 @@ export function useOrderCatalogQuery(organizationId: string | null) {
   });
 }
 
-export function useCreateOrderMutation(organizationId: string | null) {
+export function useCreateOrderMutation(_organizationId: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: createOrder,
-    onSuccess: async (result) => {
-      if (!organizationId) return;
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ordersQueryKeys.all(organizationId) }),
-        queryClient.invalidateQueries({ queryKey: ['orders', 'page', organizationId] }),
-        queryClient.invalidateQueries({ queryKey: ordersQueryKeys.detail(organizationId, result.order_id) }),
-        queryClient.invalidateQueries({ queryKey: ordersQueryKeys.catalog(organizationId) }),
-      ]);
+    onSettled: async (result, _error, input) => {
+      // A timeout can follow a committed RPC; refresh even when its response failed.
+      await invalidateAfterOrderMutation(queryClient, input.organizationId, result?.order_id);
     },
   });
 }
 
-export function useSetOrderStatusMutation(organizationId: string | null, orderId: string | null) {
+export function useSetOrderStatusMutation(_organizationId: string | null, _orderId: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: setOrderStatus,
-    onSuccess: async () => {
-      if (!organizationId) return;
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ordersQueryKeys.all(organizationId) }),
-        queryClient.invalidateQueries({ queryKey: ['orders', 'page', organizationId] }),
-        orderId ? queryClient.invalidateQueries({ queryKey: ordersQueryKeys.detail(organizationId, orderId) }) : Promise.resolve(),
-      ]);
+    onSettled: async (_result, _error, input) => {
+      await invalidateAfterOrderMutation(queryClient, input.organizationId, input.orderId);
     },
   });
 }

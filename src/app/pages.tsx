@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { Alert, Button, EmptyState, Field, Input, Loading, PageHeader, Select, StatCard } from '../components/ui';
 import { formatNumber, initials } from '../lib/format';
 import { supabase } from '../lib/supabase';
+import { canViewFinance } from '../lib/permissions';
 import { useSession } from './AuthProvider';
 
 interface Metrics {
@@ -27,7 +28,7 @@ export function DashboardPage() {
 }
 
 function OrganizationDashboard({ organizationId, organizationName }: { organizationId: string; organizationName: string }) {
-  const { memberships, selectOrganization } = useSession();
+  const { memberships, selectOrganization, currentMembershipRole } = useSession();
     const [metrics, setMetrics] = useState<Metrics>({ materials: null, lowStock: null, products: null, clients: null });
   const [loading, setLoading] = useState(true);
   const [metricsError, setMetricsError] = useState<string | null>(null);
@@ -93,7 +94,7 @@ function OrganizationDashboard({ organizationId, organizationName }: { organizat
         <div className="panel-heading"><div><h2>Próximos passos reais</h2><p>Comece pelos registros que já estão conectados ao banco desta organização.</p></div></div>
         <div className="form-actions dashboard-actions">
           <Link className="button button-secondary" to="/estoque"><Boxes size={16} />Cadastrar insumo</Link>
-          <Link className="button button-secondary" to="/compras"><Package size={16} />Registrar compra</Link>
+          {canViewFinance(currentMembershipRole) && <Link className="button button-secondary" to="/compras"><Package size={16} />Registrar compra</Link>}
           <Link className="button button-secondary" to="/produtos"><Package size={16} />Cadastrar produto</Link>
         </div>
         <div className="dashboard-real-status">

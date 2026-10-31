@@ -99,24 +99,17 @@ export function csvCell(value: unknown): string {
   return `"${text.replace(/"/g, '""')}"`;
 }
 
-export function ordersCsv(orders: OrderDto[]): string {
-  const headers = ['Código', 'Cliente', 'Título', 'Status', 'Data do pedido', 'Produção', 'Entrega', 'Subtotal', 'Desconto', 'Frete', 'Total', 'Recebido', 'Saldo', 'Moeda'];
-  const rows = orders.map((order) => [
-    order.code,
-    order.client_name,
-    order.title,
-    order.status,
-    formatDate(order.order_date),
-    formatDate(order.production_date),
-    formatDate(order.delivery_date),
-    formatCurrency(order.subtotal),
-    formatCurrency(order.discount_amount),
-    formatCurrency(order.shipping_amount),
-    formatCurrency(order.total_amount),
-    formatCurrency(order.paid_amount),
-    formatCurrency(order.balance_amount),
-    order.currency,
-  ]);
+export function ordersCsv(orders: OrderDto[], includeFinancial: boolean): string {
+  const headers = ['Código', 'Cliente', 'Título', 'Status', 'Data do pedido', 'Produção', 'Entrega'];
+  if (includeFinancial) headers.push('Subtotal', 'Desconto', 'Frete', 'Total', 'Recebido', 'Saldo', 'Moeda');
+  const rows = orders.map((order) => {
+    const row = [order.code, order.client_name, order.title, order.status, formatDate(order.order_date),
+      formatDate(order.production_date), formatDate(order.delivery_date)];
+    if (includeFinancial) row.push(formatCurrency(order.subtotal), formatCurrency(order.discount_amount),
+      formatCurrency(order.shipping_amount), formatCurrency(order.total_amount), formatCurrency(order.paid_amount),
+      formatCurrency(order.balance_amount), order.currency);
+    return row;
+  });
   return [headers, ...rows].map((row) => row.map(csvCell).join(';')).join('\r\n');
 }
 

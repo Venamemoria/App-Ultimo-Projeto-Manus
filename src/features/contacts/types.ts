@@ -40,7 +40,7 @@ export interface ClientDto extends ContactBaseDto {
 export interface SupplierDto extends ContactBaseDto {
   website: string | null;
   material_count: string;
-  current_stock_cost: string;
+  current_stock_cost: string | null;
   stocks_by_unit: string;
 }
 

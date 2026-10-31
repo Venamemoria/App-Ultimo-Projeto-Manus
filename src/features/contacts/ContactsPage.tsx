@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent 
 import { Archive, Download, ExternalLink, FileUp, Package, Pencil, Plus, RotateCcw, Search, UsersRound } from 'lucide-react';
 import { Alert, Button, EmptyState, Field, Input, Loading, Modal, PageHeader, Select, StatCard, Textarea } from '../../components/ui';
 import { useSession } from '../../app/AuthProvider';
+import { canViewFinance } from '../../lib/permissions';
 import { Decimal, formatDecimal } from '../../lib/decimal';
 import { formatDate } from '../../lib/format';
 import { OrganizationContext, OrganizationPicker } from '../inventory/OrganizationContext';
@@ -26,7 +27,8 @@ function makeNonce(): string {
   return globalThis.crypto.randomUUID();
 }
 
-function decimalValue(value: string): Decimal | null {
+function decimalValue(value: string | null): Decimal | null {
+  if (value === null) return null;
   try {
     return new Decimal(value);
   } catch {
@@ -39,7 +41,7 @@ function metricNumber(value: string): string {
   return decimal ? formatDecimal(decimal, 0) : '—';
 }
 
-function money(value: string): string {
+function money(value: string | null): string {
   const decimal = decimalValue(value);
   return decimal ? `R$ ${formatDecimal(decimal, 2, true)}` : '—';
 }
@@ -87,22 +89,22 @@ function ContactTabs({ filter, contacts, onChange }: { filter: StatusFilter; con
   </div>;
 }
 
-function ContactTable({ entity, contacts, canWrite, onDetail, onEdit, onArchive }: { entity: ContactEntity; contacts: ContactDto[]; canWrite: boolean; onDetail: (contact: ContactDto) => void; onEdit: (contact: ContactDto) => void; onArchive: (contact: ContactDto) => void }) {
-  return <div className="table-scroll"><table className="data-table contacts-table"><caption className="sr-only">{entityCopy[entity].plural} cadastrados</caption><thead><tr><th>Cadastro</th><th>Contato</th><th>Cidade / UF</th>{entity === 'supplier' ? <><th>Materiais</th><th>Custo atual</th><th>Estoque por unidade</th></> : null}<th>Status</th><th>Ações</th></tr></thead><tbody>{contacts.map((contact) => {
+function ContactTable({ entity, contacts, canWrite, showCost, onDetail, onEdit, onArchive }: { entity: ContactEntity; contacts: ContactDto[]; canWrite: boolean; showCost: boolean; onDetail: (contact: ContactDto) => void; onEdit: (contact: ContactDto) => void; onArchive: (contact: ContactDto) => void }) {
+  return <div className="table-scroll"><table className="data-table contacts-table"><caption className="sr-only">{entityCopy[entity].plural} cadastrados</caption><thead><tr><th>Cadastro</th><th>Contato</th><th>Cidade / UF</th>{entity === 'supplier' ? <><th>Materiais</th>{showCost && <th>Custo atual</th>}<th>Estoque por unidade</th></> : null}<th>Status</th><th>Ações</th></tr></thead><tbody>{contacts.map((contact) => {
     const supplier = isSupplier(contact) ? contact : null;
     const units = supplier ? stockUnits(supplier.stocks_by_unit) : [];
     return <tr key={contact.id}>
       <th scope="row"><strong>{contact.name}</strong><small className="table-subline">{contact.person_type === 'business' ? 'Pessoa jurídica' : 'Pessoa física'}{contact.tax_id ? ` · ${contact.tax_id}` : ''}</small></th>
       <td>{contact.phone || '—'}<small className="table-subline">{contact.email || 'Sem e-mail'}</small></td>
       <td>{contactAddress(contact) || '—'}</td>
-      {supplier ? <><td className="numeric">{metricNumber(supplier.material_count)}</td><td className="numeric">{money(supplier.current_stock_cost)}</td><td>{units.length ? <div className="stock-unit-list">{units.map((entry) => <span key={entry.unit}>{entry.quantity} {entry.unit}</span>)}</div> : '—'}</td></> : null}
+      {supplier ? <><td className="numeric">{metricNumber(supplier.material_count)}</td>{showCost && <td className="numeric">{money(supplier.current_stock_cost)}</td>}<td>{units.length ? <div className="stock-unit-list">{units.map((entry) => <span key={entry.unit}>{entry.quantity} {entry.unit}</span>)}</div> : '—'}</td></> : null}
       <td><span className={contact.archived_at ? 'status-pill' : 'status-pill status-on'}>{statusLabel(contact)}</span></td>
       <td><div className="table-actions"><Button variant="ghost" onClick={() => onDetail(contact)}>Detalhar</Button>{canWrite ? <><Button variant="ghost" icon={<Pencil size={15} />} onClick={() => onEdit(contact)}>Editar</Button><Button variant="ghost" icon={contact.archived_at ? <RotateCcw size={15} /> : <Archive size={15} />} onClick={() => onArchive(contact)}>{contact.archived_at ? 'Recuperar' : 'Arquivar'}</Button></> : null}</div></td>
     </tr>;
   })}</tbody></table></div>;
 }
 
-function ContactDetails({ entity, contact, onClose }: { entity: ContactEntity; contact: ContactDto; onClose: () => void }) {
+function ContactDetails({ entity, contact, showCost, onClose }: { entity: ContactEntity; contact: ContactDto; showCost: boolean; onClose: () => void }) {
   const website = isSupplier(contact) ? safeWebsite(contact.website) : null;
   const supplier = isSupplier(contact) ? contact : null;
   const units = supplier ? stockUnits(supplier.stocks_by_unit) : [];
@@ -110,7 +112,7 @@ function ContactDetails({ entity, contact, onClose }: { entity: ContactEntity; c
   return <Modal open title={`Detalhes do ${entityCopy[entity].singular}`} onClose={onClose}><div className="contact-detail">
     <div className="detail-heading"><div><p className="eyebrow">{statusLabel(contact)}</p><h3>{contact.name}</h3><p>{contact.person_type === 'business' ? 'Pessoa jurídica' : 'Pessoa física'}{contact.tax_id ? ` · ${contact.tax_id}` : ''}</p></div><UsersRound size={28} aria-hidden="true" color="#b76445" /></div>
     <div className="detail-grid"><div><span>Telefone</span><strong>{contact.phone || '—'}</strong></div><div><span>E-mail</span><strong>{contact.email || '—'}</strong></div>{entity === 'client' ? <div><span>Nascimento</span><strong>{'birth_date' in contact ? formatDate(contact.birth_date) : '—'}</strong></div> : null}{entity === 'supplier' ? <div><span>Site</span><strong>{website ? <a className="text-link" href={website} target="_blank" rel="noreferrer noopener">Abrir site <ExternalLink size={14} /></a> : '—'}</strong></div> : null}<div><span>Criado em</span><strong>{formatDate(contact.created_at)}</strong></div><div><span>Atualizado em</span><strong>{formatDate(contact.updated_at)}</strong></div></div>
-    {supplier ? <section className="detail-section"><h4>Estoque vinculado</h4><div className="detail-grid"><div><span>Materiais</span><strong>{metricNumber(supplier.material_count)}</strong></div><div><span>Custo corrente</span><strong>{money(supplier.current_stock_cost)}</strong></div></div>{units.length ? <div className="stock-unit-detail">{units.map((entry) => <span key={entry.unit}><strong>{entry.unit}</strong>{entry.quantity}</span>)}</div> : <p className="detail-text">Nenhum saldo de material vinculado.</p>}</section> : null}
+    {supplier ? <section className="detail-section"><h4>Estoque vinculado</h4><div className="detail-grid"><div><span>Materiais</span><strong>{metricNumber(supplier.material_count)}</strong></div>{showCost && <div><span>Custo corrente</span><strong>{money(supplier.current_stock_cost)}</strong></div>}</div>{units.length ? <div className="stock-unit-detail">{units.map((entry) => <span key={entry.unit}><strong>{entry.unit}</strong>{entry.quantity}</span>)}</div> : <p className="detail-text">Nenhum saldo de material vinculado.</p>}</section> : null}
     <section className="detail-section"><h4>Endereço</h4>{address ? <div className="detail-grid address-detail">{[['CEP', address.postal_code], ['Rua', address.street], ['Número', address.number], ['Bairro', address.district], ['Complemento', address.complement], ['Cidade', address.city], ['UF', address.state]].map(([label, value]) => <div key={label}><span>{label}</span><strong>{value || '—'}</strong></div>)}</div> : <p className="detail-text">Nenhum endereço informado.</p>}</section>
     <section className="detail-section"><h4>Observações</h4><p className="detail-text">{contact.notes || 'Nenhuma observação informada.'}</p></section>
     <p className="contact-detail-footnote">O status é reversível por arquivamento. Este detalhe não exibe contagem de pedidos porque ela ainda não existe no contrato de dados.</p>
@@ -233,6 +235,7 @@ function ContactsWorkspace({ entity }: { entity: ContactEntity }) {
   const [importOpen, setImportOpen] = useState(false);
   const contacts = query.data ?? [];
   const canWrite = canManageContacts(currentMembershipRole);
+  const showCost = canViewFinance(currentMembershipRole);
   const copy = entityCopy[entity];
   const hasData = !query.isError;
   const normalizedSearch = search.trim().toLocaleLowerCase('pt-BR');
@@ -244,7 +247,12 @@ function ContactsWorkspace({ entity }: { entity: ContactEntity }) {
     return matchesStatus && (!normalizedSearch || haystack.includes(normalizedSearch));
   }), [contacts, normalizedSearch, status]);
   const totalMaterials = useMemo(() => entity === 'supplier' ? contacts.reduce((total, contact) => { const supplier = isSupplier(contact) ? contact : null; const count = supplier ? decimalValue(supplier.material_count) : null; return count ? total.plus(count) : total; }, new Decimal(0)) : null, [contacts, entity]);
-  const totalCost = useMemo(() => entity === 'supplier' ? contacts.reduce<Decimal | null>((total, contact) => { const supplier = isSupplier(contact) ? contact : null; const cost = supplier ? decimalValue(supplier.current_stock_cost) : null; return !cost ? total : total ? total.plus(cost) : cost; }, new Decimal(0)) : null, [contacts, entity]);
+  const totalCost = useMemo(() => {
+    if (entity !== 'supplier' || !showCost) return null;
+    const costs = contacts.map((contact) => isSupplier(contact) ? decimalValue(contact.current_stock_cost) : null);
+    if (costs.some((cost) => cost === null)) return null;
+    return costs.reduce<Decimal>((total, cost) => total.plus(cost!), new Decimal(0));
+  }, [contacts, entity, showCost]);
 
   if (query.isLoading) return <Loading label={`Consultando ${copy.plural} da organização…`} />;
 
@@ -253,7 +261,7 @@ function ContactsWorkspace({ entity }: { entity: ContactEntity }) {
     <OrganizationPicker />
     <div className={`stats-grid contact-stats ${entity === 'supplier' ? 'supplier-stats' : ''}`}>
       <StatCard label={copy.plural[0].toUpperCase() + copy.plural.slice(1)} value={hasData ? String(contacts.length) : '—'} footnote="registros reais nesta organização" icon={<UsersRound size={17} />} />
-      {entity === 'client' ? <><StatCard label="Ativos" value={hasData ? String(contacts.filter((contact) => !contact.archived_at).length) : '—'} footnote="cadastros disponíveis" icon={<UsersRound size={17} />} /><StatCard label="Arquivados" value={hasData ? String(contacts.filter((contact) => Boolean(contact.archived_at)).length) : '—'} footnote="status reversível" icon={<Archive size={17} />} /></> : <><StatCard label="Materiais vinculados" value={hasData && totalMaterials ? formatDecimal(totalMaterials, 0) : '—'} footnote="soma de contagens reais" icon={<Package size={17} />} /><StatCard label="Custo corrente" value={hasData && totalCost ? money(totalCost.toString()) : '—'} footnote="soma decimal do estoque" icon={<Archive size={17} />} /></>}
+      {entity === 'client' ? <><StatCard label="Ativos" value={hasData ? String(contacts.filter((contact) => !contact.archived_at).length) : '—'} footnote="cadastros disponíveis" icon={<UsersRound size={17} />} /><StatCard label="Arquivados" value={hasData ? String(contacts.filter((contact) => Boolean(contact.archived_at)).length) : '—'} footnote="status reversível" icon={<Archive size={17} />} /></> : <><StatCard label="Materiais vinculados" value={hasData && totalMaterials ? formatDecimal(totalMaterials, 0) : '—'} footnote="soma de contagens reais" icon={<Package size={17} />} />{showCost && <StatCard label="Custo corrente" value={hasData && totalCost ? money(totalCost.toString()) : '—'} footnote="soma decimal do estoque" icon={<Archive size={17} />} />}</>}
     </div>
     {query.isError ? <section className="panel query-error-panel"><Alert kind="error">{userFacingContactError(query.error, `Não foi possível carregar ${copy.plural}.`)}</Alert><Button variant="secondary" loading={query.isFetching} onClick={() => void query.refetch()}>Tentar novamente</Button></section> : <section className="panel contacts-panel">
       <div className="contacts-toolbar"><div><h2 className="panel-title">Lista de {copy.plural}</h2><p className="panel-caption">Busca, status e exportação usam somente os registros carregados do Supabase.</p></div><Button variant="secondary" icon={<Download size={16} />} disabled={!filteredContacts.length} onClick={() => downloadContactsCsv(entity, filteredContacts)}>Exportar CSV</Button></div>
@@ -261,11 +269,11 @@ function ContactsWorkspace({ entity }: { entity: ContactEntity }) {
       <div className="filter-row contact-filter-row"><label className="search-field"><Search size={17} aria-hidden="true" /><span className="sr-only">{copy.search}</span><input className="input" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={copy.search} /></label><div className="contact-filter-note">{filteredContacts.length} resultado(s) visível(is)</div></div>
       {!contacts.length ? <EmptyState title={`Nenhum ${copy.singular} cadastrado`} description={`A organização ainda não tem ${copy.plural} reais. Nenhum registro demonstrativo foi incluído.`} action={canWrite ? <Button onClick={() => setFormContact(null)} icon={<Plus size={16} />}>Cadastrar primeiro {copy.singular}</Button> : undefined} /> : null}
       {contacts.length > 0 && !filteredContacts.length ? <EmptyState title="Nenhum resultado para estes filtros" description="Ajuste a busca ou altere o status para consultar os cadastros reais." /> : null}
-      {filteredContacts.length ? <ContactTable entity={entity} contacts={filteredContacts} canWrite={canWrite} onDetail={setDetailContact} onEdit={setFormContact} onArchive={setArchiveTarget} /> : null}
+      {filteredContacts.length ? <ContactTable entity={entity} contacts={filteredContacts} canWrite={canWrite} showCost={showCost} onDetail={setDetailContact} onEdit={setFormContact} onArchive={setArchiveTarget} /> : null}
       {entity === 'supplier' ? <div className="contact-stock-note"><Package size={16} aria-hidden="true" /><span>Quantidades de estoque permanecem separadas por unidade. A tela não soma gramas, centímetros ou outras unidades incompatíveis.</span></div> : null}
     </section>}
     {formContact !== undefined && organizationId ? <ContactForm open entity={entity} organizationId={organizationId} contact={formContact} onClose={() => setFormContact(undefined)} onSaved={() => setFormContact(undefined)} /> : null}
-    {detailContact ? <ContactDetails entity={entity} contact={detailContact} onClose={() => setDetailContact(null)} /> : null}
+    {detailContact ? <ContactDetails entity={entity} contact={detailContact} showCost={showCost} onClose={() => setDetailContact(null)} /> : null}
     {archiveTarget && organizationId ? <ArchiveContactModal entity={entity} organizationId={organizationId} contact={archiveTarget} onClose={() => setArchiveTarget(null)} onDone={() => setArchiveTarget(null)} /> : null}
     {organizationId ? <ImportContactsModal entity={entity} organizationId={organizationId} open={importOpen} onClose={() => setImportOpen(false)} /> : null}
   </>;

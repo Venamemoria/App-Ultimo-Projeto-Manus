@@ -1,5 +1,6 @@
 import type { MembershipRole } from '../../lib/types';
 
+export type InventoryMode = 'materials' | 'no_stock';
 export type PricingMode = 'unit' | 'variation' | 'm2';
 export type BillingUnit = 'unit' | 'm2';
 export type CompositionMode = 'inherit_base' | 'own';
@@ -11,7 +12,7 @@ export interface MaterialOption {
   organization_id: string;
   name: string;
   unit: string;
-  unit_cost: string;
+  unit_cost: string | null;
   stock_quantity: string;
 }
 
@@ -27,7 +28,7 @@ export interface ProductDto {
   personalization_info: string | null;
   production_days: string;
   pricing_mode: PricingMode;
-  price: string;
+  price: string | null;
   promo_price: string | null;
   minimum_quantity: string;
   billing_unit: BillingUnit;
@@ -40,10 +41,11 @@ export interface ProductDto {
   depth_cm: string | null;
   sku: string | null;
   barcode: string | null;
-  wholesale_tiers: WholesaleTier[];
+  wholesale_tiers: WholesaleTier[] | null;
   current_version: string;
-  current_composition_cost: string;
-  current_material_cost?: string;
+  inventory_mode: InventoryMode;
+  current_composition_cost: string | null;
+  current_material_cost?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -65,8 +67,8 @@ export interface VariantSnapshot {
   id: string;
   name: string;
   sku: string | null;
-  price: string;
-  promo_price: string | null;
+  price?: string | null;
+  promo_price?: string | null;
   active: boolean;
   minimum_quantity: string | null;
   composition_mode: CompositionMode;
@@ -81,7 +83,7 @@ export interface ProductVariantDto {
   product_id: string;
   name: string;
   sku: string | null;
-  price: string;
+  price: string | null;
   promo_price: string | null;
   active: boolean;
   minimum_quantity: string | null;
@@ -112,7 +114,7 @@ export interface ProductVersionDto {
   production_days: string;
   pricing_mode: PricingMode;
   billing_unit: BillingUnit;
-  price: string;
+  price: string | null;
   promo_price: string | null;
   minimum_quantity: string;
   is_catalog_visible: boolean;
@@ -124,11 +126,11 @@ export interface ProductVersionDto {
   depth_cm: string | null;
   sku: string | null;
   barcode: string | null;
-  wholesale_tiers: WholesaleTier[];
+  wholesale_tiers: WholesaleTier[] | null;
   composition_snapshot: ProductComponent[];
   variants_snapshot: VariantSnapshot[];
-  composition_cost: string;
-  snapshot_metadata: Record<string, unknown>;
+  composition_cost: string | null;
+  snapshot_metadata: Record<string, unknown> | null;
   created_by: string;
   created_at: string;
 }
@@ -157,6 +159,7 @@ export interface ProductFormValues {
   personalizationInfo: string;
   productionDays: string;
   pricingMode: PricingMode;
+  inventoryMode: InventoryMode;
   price: string;
   promoPrice: string;
   minimumQuantity: string;
@@ -200,6 +203,26 @@ export interface ProductUpsertResult {
   composition_cost: string;
 }
 
+export interface ProductOperationsInput {
+  organizationId: string;
+  productId: string;
+  expectedVersion: string;
+  idempotencyKey: string;
+  inventoryMode: InventoryMode;
+  description: string;
+  materialInfo: string;
+  personalizationInfo: string;
+  productionDays: string;
+  components: ProductComponent[];
+  variants: VariantSnapshot[];
+}
+
+export interface ProductOperationsResult {
+  product_id: string;
+  version: string;
+  component_count: number;
+}
+
 export interface ProductFileUploadInput {
   organizationId: string;
   productId: string;
@@ -207,8 +230,9 @@ export interface ProductFileUploadInput {
   file: File;
 }
 
-export const canManageProducts = (role: MembershipRole | null): boolean => role === 'owner' || role === 'admin' || role === 'production';
-export const canEditProducts = canManageProducts;
+export const canManageProducts = (role: MembershipRole | null): boolean => role === 'owner' || role === 'admin' || role === 'finance' || role === 'production';
+export const canEditProducts = (role: MembershipRole | null): boolean => role === 'owner' || role === 'admin' || role === 'finance';
+export const canEditProductOperations = canManageProducts;
 export const canReadProducts = (role: MembershipRole | null): boolean => Boolean(role);
 
 export const emptyFormValues = (): ProductFormValues => ({
@@ -221,6 +245,7 @@ export const emptyFormValues = (): ProductFormValues => ({
   personalizationInfo: '',
   productionDays: '0',
   pricingMode: 'unit',
+  inventoryMode: 'materials',
   price: '',
   promoPrice: '',
   minimumQuantity: '1',
@@ -250,7 +275,8 @@ export function formValuesFromSnapshot(snapshot: ProductEditSnapshot): ProductFo
     personalizationInfo: version.personalization_info ?? '',
     productionDays: version.production_days,
     pricingMode: version.pricing_mode,
-    price: version.price,
+    inventoryMode: product.inventory_mode ?? 'materials',
+    price: version.price ?? '',
     promoPrice: version.promo_price ?? '',
     minimumQuantity: version.minimum_quantity,
     wholesaleTiers: version.wholesale_tiers ?? [],
